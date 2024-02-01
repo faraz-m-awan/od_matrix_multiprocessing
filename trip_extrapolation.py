@@ -1,0 +1,514 @@
+import pandas as pd
+import geopandas as gpd
+from shapely.geometry import  Point
+import os
+from os.path import  join
+import numpy as np
+import json
+from datetime import datetime
+from spatial_join import performSpatialjoin, spatialJoin
+
+import concurrent.futures
+import multiprocessing
+
+
+
+def getLoadBalancedBuckets(tdf,bucket_size):
+        
+    print(f'{datetime.now()}: Getting unique users')
+    unique_users=tdf['uid'].unique()
+    
+    print(f'{datetime.now()}: Creating sets')
+    num_impr_df=pd.DataFrame(tdf.groupby('uid').size(),columns=['num_impressions']).reset_index().sort_values(by=['num_impressions'],ascending=False)
+    
+
+    buckets={}
+    bucket_sums={}
+    
+    for i in range (1,bucket_size+1):
+        buckets[i]=[]
+        bucket_sums[i]=0
+
+    
+    # Allocate users to buckets
+    for _, row in num_impr_df.iterrows():
+        user, impressions = row['uid'], row['num_impressions']
+        # Find the bucket with the minimum sum of impressions
+        min_bucket = min(bucket_sums, key=bucket_sums.get)
+        # Add user to this bucket
+        buckets[min_bucket].append(user)
+        # Update the sum of impressions for this bucket
+        bucket_sums[min_bucket] += impressions
+
+
+    print(f'{datetime.now()}: Creating seperate dataframes')
+
+    tdf_collection=[]
+    for i in range (1, bucket_size+1):
+        tdf_collection.append(tdf[tdf['uid'].isin(buckets[i])].copy())
+
+    return tdf_collection
+
+def getQuarter(x):
+    months=x.values
+    quarters=[]
+    for month in months:
+        if month>=1 and month<=3:
+            quarters.append(1)
+        elif month>=4 and month<=6:
+            quarters.append(2)
+        elif month>=7 and month<=9:
+            quarters.append(3)
+        elif month>=10 and month<=12:
+            quarters.append(4)
+
+    return quarters
+
+def saveFile(path,fname,df):
+
+    #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\na_flows'
+    #fname=f'na_flows_{radius}_{year}.csv'
+
+    if not os.path.exists(path):
+        os.makedirs(path)
+        
+    
+    df.to_csv(join(path,fname),index=False)
+
+    return
+
+
+
+if __name__=='__main__':
+
+    # Loading Glasgow City Region Shapefile
+
+    print(f'{datetime.now()}: Loading Shape File')
+
+    shape_file=f'D:\Mobile Device Data\Boundries\latest_boundries\\all_processed_boundries\\all_boundaries_gcr.gpkg'
+    shape=gpd.read_file(shape_file)
+
+    
+    shape=shape.to_crs('EPSG:4326')
+    shape.sindex
+
+    print(f'{datetime.now()}: Loading Shape File Finished')
+
+
+    # Loading Trip Data
+
+    year=2019
+    radius=500
+    cpu_cores=8
+    geography_level='council' # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    weighting_type='annual' # annual | quarter
+    total_days=365 # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
+
+    print(f'{datetime.now()}: Loading Trip Data')
+    fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv' #fname=f'U:\\Projects\\Huq\\Faraz\\final_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv'  #
+
+    #for tdf in pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'],chunksize=5_000):
+    #    df=tdf
+    #    break
+    df=pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
+
+    print(f'{datetime.now()}: Trip Data Loading Completed')
+
+    df_collection= getLoadBalancedBuckets(df,cpu_cores)
+
+    # Spatial Join for Origin
+
+    print(f'{datetime.now()}: Spatial Join for Origin Started')
+
+    args=[(tdf,shape,'org_lng','org_lat','origin') for tdf in df_collection]
+    with multiprocessing.Pool(cpu_cores) as pool:
+        results = pool.starmap(performSpatialjoin, args)
+
+    result1, result2, result3, result4,result5, result6, result7, result8 = results
+    
+    #traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+    df_collection=[result1,result2,result3,result4,result5,result6,result7,result8]
+
+    print(f'{datetime.now()}: Spatial Join for Origin Finished')
+
+    print(df_collection[0])
+
+
+    
+    # Spatial Join for Destination
+    
+    print(f'{datetime.now()}: Spatial Join for Destination Started')
+
+    args=[(tdf,shape,'dest_lng','dest_lat','destination') for tdf in df_collection]
+    with multiprocessing.Pool(cpu_cores) as pool:
+        results = pool.starmap(performSpatialjoin, args)
+
+    result1, result2, result3, result4,result5, result6, result7, result8 = results
+    
+    geo_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+    
+
+    print(f'{datetime.now()}: Spatial Join for Destination Finished')
+
+
+    # Filtering trips based on travel time and stay duration
+
+    print(f'{datetime.now()}: Filtering on Travel Time and Stay Duration')
+
+    geo_df=geo_df[(geo_df['dest_arival_time']-geo_df['org_leaving_time']).dt.total_seconds()/3600<=24]
+    geo_df=geo_df[geo_df['stay_duration']<=3600]
+
+    
+
+    geo_df['origin_oa_id'].fillna('Others',inplace=True)
+    geo_df['destination_oa_id'].fillna('Others',inplace=True)
+
+    geo_df['origin_dz_id'].fillna('Others',inplace=True)
+    geo_df['destination_dz_id'].fillna('Others',inplace=True)
+
+    geo_df['origin_iz_id'].fillna('Others',inplace=True)
+    geo_df['destination_iz_id'].fillna('Others',inplace=True)
+
+    geo_df['origin_council_area_id'].fillna('Others',inplace=True)
+    geo_df['destination_council_area_id'].fillna('Others',inplace=True)
+
+    geo_df['origin_council_area_name'].fillna('Others',inplace=True)
+    geo_df['destination_council_area_name'].fillna('Others',inplace=True)
+
+    print(f'{datetime.now()}: Filtering Completed')
+
+    # Adding Trip ID
+
+    print(f'{datetime.now()}: Adding Trip ID')
+
+    geo_df=geo_df.assign(trip_id=lambda df: df.groupby(['uid'])['trip_time'].transform(lambda x: [i for i in range(1,len(x)+1)]))
+
+
+    geo_df=geo_df[['uid','trip_id', 'org_lat', 'org_lng', 'org_arival_time', 'org_leaving_time',
+       'dest_lat', 'dest_lng', 'dest_arival_time', 'stay_points',
+       'trip_points', 'trip_time', 'stay_duration', 'observed_stay_duration', 
+       'origin_oa_id','destination_oa_id', 'origin_dz_id','destination_dz_id', 'origin_iz_id', 'destination_iz_id',
+       'origin_council_area_id','destination_council_area_id', 'origin_council_area_name','destination_council_area_name']]
+
+        
+
+    print(f'{datetime.now()}: Trip ID Added')
+
+
+    # Calculate Total Trips/User
+
+    print(f'{datetime.now()}: Calculating Total Trips/User')
+    geo_df['month']=geo_df['org_leaving_time'].dt.month
+    geo_df=geo_df.assign(total_trips=lambda df: df.groupby('uid')['trip_id'].transform(lambda x: len(x)))
+    geo_df['quarter']=geo_df.groupby(['uid','month'])['month'].transform(getQuarter)
+
+    geo_df.drop(columns=['month'],inplace=True)
+
+    print(f'{datetime.now()}: Trips/User Calculated')
+
+    # Add Trips/Active Day
+
+
+    #active_day_df=pd.read_csv(f'U:\\Projects\\Huq\\Faraz\\latest_OD\\{year}\\active_days_stat_{year}.csv') #f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\active_days_stat_{year}.csv'
+
+    print(f'{datetime.now()}: Calculating TPAD')
+
+
+
+    active_day_df=pd.read_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\active_days_stat_{year}.csv')
+
+    geo_df=(
+        geo_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
+        .assign(tpad=lambda tdf: tdf['total_trips']/tdf['total_active_days'])
+        )
+    print(f'{datetime.now()}: TPAD Calculated')
+
+    # Add Year and Distance Threshold (radius)
+    geo_df=geo_df.assign(year=year,distance_threshold=radius)
+    print(f'{datetime.now()}: Year and Distance Threshold Added')
+
+    # Add SIMD Level
+
+    print(f'{datetime.now()}: Adding SIMD')
+
+    hlfile=f'D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\homelocations_huq_{year}_subset_joined.csv'
+    hldf=pd.read_csv(hlfile)
+
+    geo_df=(
+        geo_df.merge(hldf[['Device_iid_hash','council','simd_quintile']],left_on='uid', right_on='Device_iid_hash',how='left')
+        .drop(columns=['Device_iid_hash'])[[
+            'year',
+            'distance_threshold',
+            'uid',
+            'council', 
+            'simd_quintile',
+            'trip_id',
+            'org_lat',
+            'org_lng',
+            'org_arival_time',
+            'org_leaving_time', 
+            'dest_lat', 
+            'dest_lng',
+            'origin_oa_id','destination_oa_id', 
+            'origin_dz_id','destination_dz_id', 
+            'origin_iz_id', 'destination_iz_id',
+            'origin_council_area_id','destination_council_area_id', 
+            'origin_council_area_name','destination_council_area_name',
+            'dest_arival_time',
+            'stay_points',
+            'trip_points',
+            'trip_time',
+            'stay_duration',
+        'observed_stay_duration', 
+        'total_trips',
+        'total_active_days', 
+        'tpad'
+        ]]
+    )
+
+   
+
+    # Add Travel Mode Placeholder
+    geo_df=geo_df.assign(travel_mode=np.nan)
+
+    # Save Non-Aggregated OD Flow
+    print(f'{datetime.now()}: Saving Non-Aggregated OD Flow')
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\na_flows',
+        fname=f'na_flows_{radius}_{year}.csv',
+        df=geo_df[[
+            'year',
+            'distance_threshold',
+            'uid', 
+            'simd_quintile',
+            'trip_id',
+            'org_lat',
+            'org_lng',
+            'org_arival_time',
+            'org_leaving_time', 
+            'dest_lat', 
+            'dest_lng',
+            'dest_arival_time',
+            'total_trips',
+            'total_active_days',
+            'tpad',
+            'travel_mode']]
+        )
+    print(f'{datetime.now()}:  Non-Aggregated OD Flow Saved')
+
+
+    # Save Output Area Aggregated Flow
+
+    print(f'{datetime.now()}: Saving OA-Aggregated OD Flow')
+
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\oa_agg_stay_points',
+        fname=f'non_agg_stay_points_{radius}_{year}.csv',
+        df=geo_df[
+            [
+            'year', 
+            'distance_threshold', 
+            'origin_oa_id',
+            'destination_oa_id',
+            'org_arival_time', 
+            'org_leaving_time', 
+            'dest_arival_time',
+            'travel_mode'
+            ]
+        ]
+    )
+    print(f'{datetime.now()}:  OA-Aggregated OD Flow Saved')
+
+    # Save Non Aggregated Stay Points
+
+    print(f'{datetime.now()}: Saving Non-Aggragated Stay Points')
+
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\non_agg_stay_points',
+        fname=f'non_agg_stay_points_{radius}_{year}.csv',
+        df=geo_df[
+            [
+                'year', 
+                'distance_threshold', 
+                'uid',
+                'simd_quintile',
+                'stay_points',
+                'org_arival_time', 
+                'org_leaving_time', 
+                'stay_duration',
+                'org_lat',
+                'org_lng',
+                'total_active_days'
+                ]].rename(
+                    columns={
+                        'org_lat':'centroid_lat', # Changing the name to centroid because stay points don't have origin and destination
+                        'org_lng':'centroid_lng',
+                        'org_arival_time':'stop_node_arival_time',
+                        'org_leaving_time':'stop_node_leaving_time'
+                        }
+                    )
+    )
+
+    print(f'{datetime.now()}: Non-Aggragated Stay Points Saved')
+
+
+    # Save Aggregated Stay Points
+
+    print(f'{datetime.now()}: Saving Aggragated Stay Points')
+
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\agg_stay_points',
+        fname=f'agg_stay_points_{radius}_{year}.csv',
+        df=geo_df[
+            [
+            'year', 
+            'distance_threshold', 
+            'simd_quintile',
+            'origin_oa_id',
+            'org_arival_time', 
+            'org_leaving_time', 
+            'stay_duration'
+            ]].rename(
+                columns={
+                    'org_arival_time':'stop_node_arival_time',
+                    'org_leaving_time' :'stop_node_leaving_time',
+                    'origin_oa_id' : 'stop_node_oa'
+                    }
+                )
+    )
+
+    print(f'{datetime.now()}: Aggragated Stay Points Saved')
+
+
+    # Save Trip Points
+
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trip_points',
+        fname=f'trip_points_{radius}_{year}.csv',
+        df=geo_df[
+            [
+                'year', 
+                'distance_threshold', 
+                'uid',
+                'simd_quintile',
+                'trip_id',
+                'trip_points',
+                'total_active_days',
+                'travel_mode'
+            ]
+        ]
+    )
+
+
+
+     ##################################################################################
+    #                                                                                #
+    #                           OD Generation                                        #
+    #                                                                                #
+    ##################################################################################
+
+
+    if geography_level=='council':
+        origin_col=f'origin_{geography_level}_area_name'
+        destination_col=f'destination_{geography_level}_area_name'
+    else:
+        origin_col=f'origin_{geography_level}_id'
+        destination_col=f'destination_{geography_level}_id'
+
+
+    geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
+    od_trip_df=pd.DataFrame(geo_df.groupby(['uid','council','simd_quintile',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+    od_trip_df=(
+    od_trip_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
+    .assign(tpad=lambda tdf: tdf['trips']/tdf['total_active_days'])
+    )
+
+    
+
+    od_trip_df.rename(columns={'council':'user_home_location'},inplace=True)
+
+    # Calculating Weights Based in Adult Population and HUQ Population
+    adult_population = pd.read_csv(f"D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\\adultpopulation.csv") # Reading adult population file
+
+
+    annual_users=(
+    od_trip_df.dropna(subset=['simd_quintile'])
+    .groupby(['user_home_location', 'simd_quintile'])
+    .agg(users=('uid', 'nunique'))
+    .reset_index()
+    .merge(adult_population, left_on=['user_home_location', 'simd_quintile'], right_on=['council', 'simd_quintile'], how='left')
+    .groupby('user_home_location')
+    .apply(lambda group: group.assign(Huq_percent=group['users'] / group['users'].sum()))
+    .reset_index(drop=True)
+    .assign(simd_weight=lambda df: df['percentage'] / df['Huq_percent'])
+    .groupby('user_home_location')
+    .apply(lambda group: group.assign(total_pop=group['Total'].sum(), huq_pop=group['users'].sum()))
+    .reset_index(drop=True)
+    .assign(council_weight=lambda df: (df['total_pop'] / df['Total'].sum()) / (df['huq_pop'] / df['users'].sum()))
+    
+    )
+
+    annual_users=annual_users[ # Rearranging Columns
+        ['council', 
+        'simd_quintile', 
+        'users', 'Total', 
+        'percentage',
+        'Huq_percent', 
+        'total_pop', 
+        'huq_pop', 
+        'simd_weight', 
+        'council_weight']
+        ]
+    
+    annual_users=annual_users.rename(columns={
+        'users':'huq_user_simd_level',
+        'Total':'adult_pop_simd_level',
+        'percentage':'adult_pop_percentage_simd_level',
+        'Huq_percent':'huq_users_percentage_simd_level',
+        'total_pop':'adult_pop_council_level',
+        'huq_pop':'huq_users_council_level',
+    })
+
+
+    
+
+    od_trip_df=od_trip_df.merge(annual_users[['council','simd_quintile','simd_weight','council_weight']],how='left',left_on=['user_home_location','simd_quintile'],right_on=['council','simd_quintile'],suffixes=['_od','_anu'])
+    od_trip_df['simd_weight']=od_trip_df['simd_weight'].fillna(1)
+    od_trip_df['council_weight']=od_trip_df['council_weight'].fillna(1)
+    od_trip_df['activity_weight']= total_days/od_trip_df['total_active_days']
+
+
+    if weighting_type=='annual':
+        cols=['uid', 'user_home_location', 'simd_quintile', origin_col,
+       destination_col, 'trips','activity_weight','simd_weight', 'council_weight']
+
+
+    od_trip_df=od_trip_df[cols]
+
+    print(od_trip_df)
+
+    huq_population= len(od_trip_df['uid'].unique())
+    adult_population= adult_population['Total'].sum()
+
+
+    agg_od_df=od_trip_df.groupby([origin_col,destination_col]).agg(
+
+        trips=('trips', 'sum'),
+        activity_weighted_trips= ('trips', lambda x: ((x * od_trip_df.loc[x.index,'activity_weight']).sum()/huq_population)*adult_population),
+        council_weighted_trips= ('trips', lambda x: ((x * od_trip_df.loc[x.index,'simd_weight'] * od_trip_df.loc[x.index,'council_weight']).sum()/huq_population)*adult_population),
+        act_cncl_weighted_trips= ('trips', lambda x: ((x * od_trip_df.loc[x.index,'activity_weight'] * od_trip_df.loc[x.index,'simd_weight'] * od_trip_df.loc[x.index,'council_weight']).sum()/huq_population)*adult_population)
+    ).reset_index()
+
+    agg_od_df=agg_od_df[agg_od_df[origin_col]!='Others']
+    agg_od_df=agg_od_df[agg_od_df[destination_col]!='Others']
+    
+    print(f' Saving in: D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\od_matrix')
+    print(agg_od_df)
+    saveFile(
+        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\od_matrix',
+        fname=f'od_{radius}_{year}.csv',
+        df=agg_od_df
+    )
+    
+
+
