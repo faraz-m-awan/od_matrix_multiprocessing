@@ -2,7 +2,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import  Point
 import os
-from os.path import  join
+from os.path import  join, isfile
 import numpy as np
 import json
 from datetime import datetime
@@ -10,6 +10,7 @@ from spatial_join import performSpatialjoin, spatialJoin
 
 import concurrent.futures
 import multiprocessing
+from tqdm import tqdm
 
 
 
@@ -67,7 +68,7 @@ def getQuarter(x):
 def saveFile(path,fname,df):
 
     #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\na_flows'
-    #fname=f'na_flows_{radius}_{year}.csv'
+    #fname=f'na_flows_{radius}m_{year}.csv'
 
     if not os.path.exists(path):
         os.makedirs(path)
@@ -81,9 +82,31 @@ def saveFile(path,fname,df):
 
 if __name__=='__main__':
 
+    year=2021
+    month= 'all'
+    radius=200
+    cpu_cores=8
+    geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    weighting_type='annual'     # annual | quarter
+    total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
+
+
+    print(f"""
+    <OD Calculation Parameters>
+    Year: {year}
+    Month: {month}
+    Radius: {radius}m
+    Geography Level: {geography_level}
+    Weighting Type: {weighting_type}
+    Total Days: {total_days}
+    \n
+    """)
+
+    start_time=datetime.now()
+
     # Loading Glasgow City Region Shapefile
 
-    print(f'{datetime.now()}: Loading Shape File')
+    print(f'{start_time}: Loading Shape File')
 
     shape_file=f'D:\Mobile Device Data\Boundries\latest_boundries\\all_processed_boundries\\all_boundaries_gcr.gpkg'
     shape=gpd.read_file(shape_file)
@@ -96,23 +119,23 @@ if __name__=='__main__':
 
 
     # Loading Trip Data
-
-    year=2019
-    radius=500
-    cpu_cores=8
-    geography_level='council' # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
-    weighting_type='annual' # annual | quarter
-    total_days=365 # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
-
     print(f'{datetime.now()}: Loading Trip Data')
-    fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv' #fname=f'U:\\Projects\\Huq\\Faraz\\final_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv'  #
+    if year==2021:
+        df=[]
+        root=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips'
+        files=[f'{root}\\{f}' for f in os.listdir(root) if isfile(join(root,f))]
+        print(f'{datetime.now()}: Combining and Loading Trip Data')
+        for file in tqdm(files):
+            df.append(pd.read_csv(file,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time']))
+        
+        df=pd.concat(df)
+        print(f'{datetime.now()}: Trip Data Loading Completed')
+    else:
+        
+        fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips\\huq_trips_{year}_{month}_{radius}m_5min_100m.csv' #fname=f'U:\\Projects\\Huq\\Faraz\\final_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv'  #
+        df=pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
 
-    #for tdf in pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'],chunksize=5_000):
-    #    df=tdf
-    #    break
-    df=pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
-
-    print(f'{datetime.now()}: Trip Data Loading Completed')
+        print(f'{datetime.now()}: Trip Data Loading Completed')
 
     df_collection= getLoadBalancedBuckets(df,cpu_cores)
 
@@ -131,7 +154,6 @@ if __name__=='__main__':
 
     print(f'{datetime.now()}: Spatial Join for Origin Finished')
 
-    print(df_collection[0])
 
 
     
@@ -275,7 +297,7 @@ if __name__=='__main__':
     print(f'{datetime.now()}: Saving Non-Aggregated OD Flow')
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\na_flows',
-        fname=f'na_flows_{radius}_{year}.csv',
+        fname=f'na_flows_{radius}m_{year}.csv',
         df=geo_df[[
             'year',
             'distance_threshold',
@@ -303,7 +325,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\oa_agg_stay_points',
-        fname=f'non_agg_stay_points_{radius}_{year}.csv',
+        fname=f'non_agg_stay_points_{radius}m_{year}.csv',
         df=geo_df[
             [
             'year', 
@@ -325,7 +347,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\non_agg_stay_points',
-        fname=f'non_agg_stay_points_{radius}_{year}.csv',
+        fname=f'non_agg_stay_points_{radius}m_{year}.csv',
         df=geo_df[
             [
                 'year', 
@@ -358,7 +380,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\agg_stay_points',
-        fname=f'agg_stay_points_{radius}_{year}.csv',
+        fname=f'agg_stay_points_{radius}m_{year}.csv',
         df=geo_df[
             [
             'year', 
@@ -381,10 +403,11 @@ if __name__=='__main__':
 
 
     # Save Trip Points
+    print(f'{datetime.now()}: Saving Trips Points')
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trip_points',
-        fname=f'trip_points_{radius}_{year}.csv',
+        fname=f'trip_points_{radius}m_{year}.csv',
         df=geo_df[
             [
                 'year', 
@@ -399,6 +422,8 @@ if __name__=='__main__':
         ]
     )
 
+    print(f'{datetime.now()}: Trips Points Saved')
+
 
 
      ##################################################################################
@@ -406,6 +431,8 @@ if __name__=='__main__':
     #                           OD Generation                                        #
     #                                                                                #
     ##################################################################################
+
+    print(f'{datetime.now()}: OD Calculation Started')
 
 
     if geography_level=='council':
@@ -437,11 +464,11 @@ if __name__=='__main__':
     .agg(users=('uid', 'nunique'))
     .reset_index()
     .merge(adult_population, left_on=['user_home_location', 'simd_quintile'], right_on=['council', 'simd_quintile'], how='left')
-    .groupby('user_home_location')
+    .groupby('user_home_location',group_keys=True)
     .apply(lambda group: group.assign(Huq_percent=group['users'] / group['users'].sum()))
     .reset_index(drop=True)
     .assign(simd_weight=lambda df: df['percentage'] / df['Huq_percent'])
-    .groupby('user_home_location')
+    .groupby('user_home_location',group_keys=True)
     .apply(lambda group: group.assign(total_pop=group['Total'].sum(), huq_pop=group['users'].sum()))
     .reset_index(drop=True)
     .assign(council_weight=lambda df: (df['total_pop'] / df['Total'].sum()) / (df['huq_pop'] / df['users'].sum()))
@@ -485,7 +512,6 @@ if __name__=='__main__':
 
     od_trip_df=od_trip_df[cols]
 
-    print(od_trip_df)
 
     huq_population= len(od_trip_df['uid'].unique())
     adult_population= adult_population['Total'].sum()
@@ -501,14 +527,41 @@ if __name__=='__main__':
 
     agg_od_df=agg_od_df[agg_od_df[origin_col]!='Others']
     agg_od_df=agg_od_df[agg_od_df[destination_col]!='Others']
+
+    print(f'{datetime.now()}: OD Generation Completed')
+    print(f'{datetime.now()}: Saving OD')
+
+    agg_od_df['year']=year
+    agg_od_df['distance_threshold']=radius
+    agg_od_df['geography_level']=geography_level
+
+    agg_od_df=agg_od_df[[
+        'year',
+        'distance_threshold',
+        'geography_level',
+        origin_col,
+        destination_col,
+        'trips',
+        'activity_weighted_trips',
+        'council_weighted_trips',
+        'act_cncl_weighted_trips'
+    ]]
+
+
+
     
-    print(f' Saving in: D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\od_matrix')
-    print(agg_od_df)
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\od_matrix',
-        fname=f'od_{radius}_{year}.csv',
+        fname=f'od_{geography_level}_{radius}m_{year}.csv',
         df=agg_od_df
     )
+
+    end_time=datetime.now()
+
+    print(f'{end_time}: OD Saved')
+
+    print(f'{end_time}: Processed Completed')
+    print(f'\n\nTotal Time Taken: {(end_time-start_time).total_seconds()/60} minutes')
     
 
 

@@ -45,8 +45,8 @@ from flow_generation import generateFlow, processFlowGenration
 
 class ODCalculation():
 
-    year=2022
-    month= 'all' # month number | 'all'
+    year=2021
+    month= 1 # month number | 'all'
     radius=200
     time_th=5
     impr_acc=100
@@ -198,178 +198,195 @@ class ODCalculation():
 if __name__=='__main__':
     
     obj=ODCalculation()
+    for i in range(1,13):
+        obj.month=i
+
+        print(f"""
+        <OD Calculation Parameters>
+        Year: {obj.year}
+        Month: {obj.month}
+        Radius: {obj.radius}
+        \n
+        """)
+
+        start_time=datetime.now()
+
+        print(f'{start_time}: Fetching data from Database')
+        
+        """with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            
+            future1 = executor.submit(fetchData, 2021,2021,1,1,1,4)
+            future2 = executor.submit(fetchData, 2021,2021,1,1,4,8)
+            future3 = executor.submit(fetchData, 2021,2021,1,1,8,12)
+            future4 = executor.submit(fetchData, 2021,2021,1,1,12,16)
+            future5 = executor.submit(fetchData, 2021,2021,1,1,16,20)
+            future6 = executor.submit(fetchData, 2021,2021,1,1,20,24)
+            future7 = executor.submit(fetchData, 2021,2021,1,1,24,28)
+            future8 = executor.submit(fetchData, 2021,2021,1,2,28,1)"""
+            
+
+        args=[]
+
+        if obj.month=='all':
+            args=obj.getMonthlyDivsion()
+            print(f'{args}')
+            with multiprocessing.Pool(obj.cpu_cores) as pool:
+                results = pool.starmap(fetchData, args)
+
+            result1, result2, result3, result4,result5, result6 = results
+            obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6])
+        else:
+            args=obj.getDatesDivision()
+            print(f'{args}')
+            with multiprocessing.Pool(obj.cpu_cores) as pool:
+                results = pool.starmap(fetchData, args)
+
+            result1, result2, result3, result4,result5, result6, result7, result8 = results
+            obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
 
 
-    print(f'{datetime.now()}: Fetching data from Database')
-    
-    #with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-    
-    #    future1 = executor.submit(fetchData, obj.year, obj.month,obj.month, 1, 8)
-    #    future2 = executor.submit(fetchData, obj.year, obj.month,obj.month, 8, 16)
-    #    future3 = executor.submit(fetchData, obj.year, obj.month,obj.month, 16, 24)
-    #    future4 = executor.submit(fetchData, obj.year, obj.month,obj.month+1, 24, 1)
+        
 
-    args=[]
+        
+        
+        #obj.raw_df=pd.concat([future1.result(),future2.result(),future3.result(),future1.result()])
+        print(f'{datetime.now()}: Data fetching completed\n\n')
+        print(f'Number of Records: {obj.raw_df.shape[0]}')
 
-    if obj.month=='all':
-        args=obj.getMonthlyDivsion()
-        print(f'{args}')
+        # Converting Raw DataFrame into a Trajectory DataFrame
+        
+        traj_df= TrajDataFrame(obj.raw_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
+
+
+        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
+
+        print(f'{datetime.now()}: Filtering Started')
+
+        args=[(tdf,obj.impr_acc) for tdf in tdf_collection]
         with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(fetchData, args)
-
-        result1, result2, result3, result4,result5, result6 = results
-        obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6])
-    else:
-        args=obj.getDatesDivision()
-        print(f'{args}')
-        with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(fetchData, args)
+            results = pool.starmap(filter_data_process, args)
 
         result1, result2, result3, result4,result5, result6, result7, result8 = results
-        obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
 
+        print(f'{datetime.now()}: Filtering Finished\n\n\n')
 
-    
+        ##################################################################################
+        #                                                                                #
+        #                           Stope Node Detection                                 #
+        #                                                                                #
+        ##################################################################################
 
-    
-    
-    #obj.raw_df=pd.concat([future1.result(),future2.result(),future3.result(),future1.result()])
-    print(f'{datetime.now()}: Data fetching completed\n\n')
-    print(f'Number of Records: {obj.raw_df.shape[0]}')
+        print(f'{datetime.now()}: Stop Node Detection Started\n\n')
 
-    # Converting Raw DataFrame into a Trajectory DataFrame
-    
-    traj_df= TrajDataFrame(obj.raw_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
+        print(f'Detecting stop nodes for the month: {traj_df.datetime.dt.month.unique().tolist()}')
+        print(f'Radius: {obj.radius}\nTime Threshold: {obj.time_th}\nImpression Accuracy: {obj.impr_acc}')
+        
+        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
 
+        print(f'{datetime.now()}: Stop Node Detection Started')
 
-    tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
+        args=[(tdf,obj.time_th,obj.radius) for tdf in tdf_collection]
+        with multiprocessing.Pool(obj.cpu_cores) as pool:
+            results = pool.starmap(stop_node_process, args)
 
-    print(f'{datetime.now()}: Filtering Started')
+        result1, result2, result3, result4,result5, result6, result7, result8 = results
 
-    args=[(tdf,obj.impr_acc) for tdf in tdf_collection]
-    with multiprocessing.Pool(obj.cpu_cores) as pool:
-        results = pool.starmap(filter_data_process, args)
+        stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
 
-    result1, result2, result3, result4,result5, result6, result7, result8 = results
-    traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        
 
-    print(f'{datetime.now()}: Filtering Finished\n\n\n')
+        print(f'{datetime.now()} Stop Node Detection Completed\n')
 
-    ##################################################################################
-    #                                                                                #
-    #                           Stope Node Detection                                 #
-    #                                                                                #
-    ##################################################################################
+        #fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv'
 
-    print(f'{datetime.now()}: Stop Node Detection Started\n\n')
+        #stdf.to_csv(fname,index=False)
 
-    print(f'Detecting stop nodes for the month: {traj_df.datetime.dt.month.unique().tolist()}')
-    print(f'Radius: {obj.radius}\nTime Threshold: {obj.time_th}\nImpression Accuracy: {obj.impr_acc}')
-    
-    tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
-
-    print(f'{datetime.now()}: Stop Node Detection Started')
-
-    args=[(tdf,obj.time_th,obj.radius) for tdf in tdf_collection]
-    with multiprocessing.Pool(obj.cpu_cores) as pool:
-        results = pool.starmap(stop_node_process, args)
-
-    result1, result2, result3, result4,result5, result6, result7, result8 = results
-
-    stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
-
-    
-
-    print(f'{datetime.now()} Stop Node Detection Completed\n')
-
-    #fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv'
-
-    #stdf.to_csv(fname,index=False)
-
-    obj.saveFile(
-        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
-        fname=f'huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
-        df=stdf
-    )
-    
-
-
-    ##################################################################################
-    #                                                                                #
-    #                           Flow Generation                                      #
-    #                                                                                #
-    ##################################################################################
-    #print('Starting')
-    #stdf=pd.read_csv('D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\2022\\with_mp_huq_stop_nodes_2022_all_200m_5min_100m.csv',parse_dates=['datetime','leaving_datetime']) #Delete
-    #temp_users=list(pd.read_csv('D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\2022\\test_users.csv')['uid'].values) #Delete
-
-    #stdf=stdf[stdf['uid'].isin(temp_users)] #Delete
-    #obj.raw_df=obj.raw_df[obj.raw_df['uid'].isin(temp_users)] #Delete
-
-
-    stdf.rename(columns={'lat':'org_lat','lng':'org_lng'},inplace=True)
-    stdf['dest_at']=stdf.groupby('uid')['datetime'].transform(lambda x: x.shift(-1))
-    stdf['dest_lat']=stdf.groupby('uid')['org_lat'].transform(lambda x: x.shift(-1))
-    stdf['dest_lng']=stdf.groupby('uid')['org_lng'].transform(lambda x: x.shift(-1))
-    stdf=stdf.dropna(subset=['dest_lat'])
-
-    #Indexing Raw Data
-    obj.raw_df.set_index(['uid','datetime'],inplace=True)
-    obj.raw_df.sort_index(inplace=True)
-
-
-
-
-    
-
-    
-    tdf_collection= obj.getLoadBalancedBuckets(stdf,obj.cpu_cores)
-
-    print(f'{datetime.now()}: Generating args')
-    print(tdf_collection[0].head())
-    args=[]
-    #[(tdf,obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())]) for tdf in tdf_collection]
-    for tdf in tdf_collection:
-        args.append(
-            (
-                tdf,
-                obj.raw_df.loc[list(tdf['uid'].unique())].copy()
-            )
+        obj.saveFile(
+            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
+            fname=f'huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            df=stdf
         )
-    print(f'{datetime.now()}: args Generation Completed')
+        
 
 
-    print(f'{datetime.now()}: Flow Generation Started\n\n')
-    with multiprocessing.Pool(obj.cpu_cores) as pool:
-        results = pool.starmap(generateFlow, args)
+        ##################################################################################
+        #                                                                                #
+        #                           Flow Generation                                      #
+        #                                                                                #
+        ##################################################################################
+        #print('Starting')
+        #stdf=pd.read_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes\\huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_5min_100m.csv',parse_dates=['datetime','leaving_datetime']) #Delete
+        #temp_users=list(pd.read_csv('D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\2022\\test_users.csv')['uid'].values) #Delete
 
-    result1, result2, result3, result4,result5, result6, result7, result8 = results
-
-    flow_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
-
-    print(f'{datetime.now()} Flow Generation Completed\n')
-    print(flow_df.head())
-
-    #flow_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips\huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',index=False)
+        #stdf=stdf[stdf['uid'].isin(temp_users)] #Delete
+        #obj.raw_df=obj.raw_df[obj.raw_df['uid'].isin(temp_users)] #Delete
 
 
-    obj.saveFile(
-        path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
-        fname=f'huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
-        df=flow_df
-    )
+        stdf.rename(columns={'lat':'org_lat','lng':'org_lng'},inplace=True)
+        stdf['dest_at']=stdf.groupby('uid')['datetime'].transform(lambda x: x.shift(-1))
+        stdf['dest_lat']=stdf.groupby('uid')['org_lat'].transform(lambda x: x.shift(-1))
+        stdf['dest_lng']=stdf.groupby('uid')['org_lng'].transform(lambda x: x.shift(-1))
+        stdf=stdf.dropna(subset=['dest_lat'])
 
-    print(f'{datetime.now()}: Processed Completed')
-    ##################################################################################
-    #                                                                                #
-    #                           Trips Extrapolation                                  #
-    #                                                                                #
-    ##################################################################################
+        #Indexing Raw Data
+        obj.raw_df.set_index(['uid','datetime'],inplace=True)
+        obj.raw_df.sort_index(inplace=True)
 
 
 
 
+        
 
-    
+        
+        tdf_collection= obj.getLoadBalancedBuckets(stdf,obj.cpu_cores)
 
-    
+        print(f'{datetime.now()}: Generating args')
+        args=[]
+        #[(tdf,obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())]) for tdf in tdf_collection]
+        for tdf in tdf_collection:
+            args.append(
+                (
+                    tdf,
+                    obj.raw_df.copy()
+                )
+            )
+        print(f'{datetime.now()}: args Generation Completed')
+
+
+        print(f'{datetime.now()}: Flow Generation Started\n\n')
+        with multiprocessing.Pool(obj.cpu_cores) as pool:
+            results = pool.starmap(generateFlow, args)
+
+        result1, result2, result3, result4,result5, result6, result7, result8 = results
+
+        flow_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+
+        print(f'{datetime.now()} Flow Generation Completed\n')
+
+        #flow_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips\huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',index=False)
+
+
+        obj.saveFile(
+            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
+            fname=f'huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            df=flow_df
+        )
+
+        end_time=datetime.now()
+
+        print(f'{end_time}: Processed Completed')
+        print(f'\n\nTotal Time Taken: {(end_time-start_time).total_seconds()/60} minutes')
+        ##################################################################################
+        #                                                                                #
+        #                           Trips Extrapolation                                  #
+        #                                                                                #
+        ##################################################################################
+
+
+
+
+
+        
+
+        
