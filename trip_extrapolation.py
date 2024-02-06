@@ -11,6 +11,7 @@ from spatial_join import performSpatialjoin, spatialJoin
 import concurrent.futures
 import multiprocessing
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 
 
@@ -82,13 +83,20 @@ def saveFile(path,fname,df):
 
 if __name__=='__main__':
 
-    year=2021
+    year=2019
     month= 'all'
     radius=200
     cpu_cores=8
-    geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    geography_level='council'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
     weighting_type='annual'     # annual | quarter
     total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
+
+    if geography_level=='council':
+        origin_col=f'origin_{geography_level}_area_name'
+        destination_col=f'destination_{geography_level}_area_name'
+    else:
+        origin_col=f'origin_{geography_level}_id'
+        destination_col=f'destination_{geography_level}_id'
 
 
     print(f"""
@@ -120,10 +128,11 @@ if __name__=='__main__':
 
     # Loading Trip Data
     print(f'{datetime.now()}: Loading Trip Data')
-    if year==2021:
+
+    if year==2020 or year==2021:
         df=[]
         root=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips'
-        files=[f'{root}\\{f}' for f in os.listdir(root) if isfile(join(root,f))]
+        files=[f'{root}\\{f}' for f in os.listdir(root) if str(radius) in f ]
         print(f'{datetime.now()}: Combining and Loading Trip Data')
         for file in tqdm(files):
             df.append(pd.read_csv(file,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time']))
@@ -133,7 +142,8 @@ if __name__=='__main__':
     else:
         
         fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips\\huq_trips_{year}_{month}_{radius}m_5min_100m.csv' #fname=f'U:\\Projects\\Huq\\Faraz\\final_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv'  #
-        df=pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
+        df= pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
+
 
         print(f'{datetime.now()}: Trip Data Loading Completed')
 
@@ -180,7 +190,7 @@ if __name__=='__main__':
     geo_df=geo_df[(geo_df['dest_arival_time']-geo_df['org_leaving_time']).dt.total_seconds()/3600<=24]
     geo_df=geo_df[geo_df['stay_duration']<=3600]
 
-    
+    print('here')
 
     geo_df['origin_oa_id'].fillna('Others',inplace=True)
     geo_df['destination_oa_id'].fillna('Others',inplace=True)
@@ -197,7 +207,36 @@ if __name__=='__main__':
     geo_df['origin_council_area_name'].fillna('Others',inplace=True)
     geo_df['destination_council_area_name'].fillna('Others',inplace=True)
 
+
+    print('Now here')
+
+    geo_df=geo_df[geo_df[origin_col]!='Others']
+    geo_df=geo_df[geo_df[destination_col]!='Others']
+
     print(f'{datetime.now()}: Filtering Completed')
+
+
+    #############################################################
+    #                                                           #
+    #                   Analysis                                #
+    #                                                           #
+    #############################################################
+
+
+    #analysis_df=geo_df.groupby([origin_col,destination_col]).agg(
+     #   total_trips=pd.NamedAgg(column='uid',aggfunc='count'),
+     #   num_users=pd.NamedAgg(column='uid',aggfunc='nunique')
+     #   ).reset_index()
+
+    #print(analysis_df)
+    #analysis_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trip_analysis_{radius}m_{year}.csv')
+
+    #analysis_df['num_users'].plot(kind='box')
+    #plt.show()
+
+    
+
+    #exit()
 
     # Adding Trip ID
 
@@ -281,10 +320,10 @@ if __name__=='__main__':
             'trip_points',
             'trip_time',
             'stay_duration',
-        'observed_stay_duration', 
-        'total_trips',
-        'total_active_days', 
-        'tpad'
+            'observed_stay_duration', 
+            'total_trips',
+            'total_active_days', 
+            'tpad'
         ]]
     )
 
@@ -293,11 +332,12 @@ if __name__=='__main__':
     # Add Travel Mode Placeholder
     geo_df=geo_df.assign(travel_mode=np.nan)
 
+
     # Save Non-Aggregated OD Flow
     print(f'{datetime.now()}: Saving Non-Aggregated OD Flow')
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\na_flows',
-        fname=f'na_flows_{radius}m_{year}.csv',
+        fname=f'na_flows_{geography_level}_{radius}m_{year}.csv',
         df=geo_df[[
             'year',
             'distance_threshold',
@@ -325,7 +365,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\oa_agg_stay_points',
-        fname=f'non_agg_stay_points_{radius}m_{year}.csv',
+        fname=f'non_agg_stay_points_{geography_level}_{radius}m_{year}.csv',
         df=geo_df[
             [
             'year', 
@@ -347,7 +387,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\non_agg_stay_points',
-        fname=f'non_agg_stay_points_{radius}m_{year}.csv',
+        fname=f'non_agg_stay_points_{geography_level}_{radius}m_{year}.csv',
         df=geo_df[
             [
                 'year', 
@@ -380,7 +420,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\agg_stay_points',
-        fname=f'agg_stay_points_{radius}m_{year}.csv',
+        fname=f'agg_stay_points_{geography_level}_{radius}m_{year}.csv',
         df=geo_df[
             [
             'year', 
@@ -407,7 +447,7 @@ if __name__=='__main__':
 
     saveFile(
         path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trip_points',
-        fname=f'trip_points_{radius}m_{year}.csv',
+        fname=f'trip_points_{geography_level}_{radius}m_{year}.csv',
         df=geo_df[
             [
                 'year', 
@@ -435,20 +475,24 @@ if __name__=='__main__':
     print(f'{datetime.now()}: OD Calculation Started')
 
 
-    if geography_level=='council':
-        origin_col=f'origin_{geography_level}_area_name'
-        destination_col=f'destination_{geography_level}_area_name'
-    else:
-        origin_col=f'origin_{geography_level}_id'
-        destination_col=f'destination_{geography_level}_id'
+   
 
 
     geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
-    od_trip_df=pd.DataFrame(geo_df.groupby(['uid','council','simd_quintile',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+
+    od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+
     od_trip_df=(
     od_trip_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
     .assign(tpad=lambda tdf: tdf['trips']/tdf['total_active_days'])
     )
+
+    hlfile=f'D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\homelocations_huq_{year}_subset_joined.csv'
+    hldf=pd.read_csv(hlfile)
+
+    od_trip_df=pd.merge(od_trip_df,hldf[['Device_iid_hash','council','simd_quintile']],how='left',left_on='uid',right_on='Device_iid_hash').drop(columns=['Device_iid_hash'])
+    od_trip_df
+
 
     
 
@@ -534,6 +578,7 @@ if __name__=='__main__':
     agg_od_df['year']=year
     agg_od_df['distance_threshold']=radius
     agg_od_df['geography_level']=geography_level
+    agg_od_df['percentage']= (agg_od_df['act_cncl_weighted_trips']/agg_od_df['act_cncl_weighted_trips'].sum())*100
 
     agg_od_df=agg_od_df[[
         'year',
@@ -544,7 +589,8 @@ if __name__=='__main__':
         'trips',
         'activity_weighted_trips',
         'council_weighted_trips',
-        'act_cncl_weighted_trips'
+        'act_cncl_weighted_trips',
+        'percentage'
     ]]
 
 

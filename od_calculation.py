@@ -45,14 +45,19 @@ from flow_generation import generateFlow, processFlowGenration
 
 class ODCalculation():
 
-    year=2021
-    month= 1 # month number | 'all'
-    radius=200
+    year=2020
+    month=[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
+    radius=500
     time_th=5
-    impr_acc=100
+    impr_acc=500
     cpu_cores=8 # Cores to be used for multiprocessing
 
+
     def __init__(self_):
+
+        
+
+
         return
 
     def getLoadBalancedBuckets(self_,tdf,bucket_size):
@@ -92,18 +97,18 @@ class ODCalculation():
         return tdf_collection
     
 
-    def getDatesDivision(self_):
+    def getDatesDivision(self_,month):
 
         args=[]
         window_size=3
-        start_month=self_.month
-        end_month=self_.month
+        start_month=month
+        end_month=month
         start_date=1
         end_date=start_date+window_size
         start_year=obj.year
         end_year=obj.year
 
-        for i in range(0,8):
+        for i in range(0,self_.cpu_cores):
             
             args.append((start_year,end_year,start_month,end_month,start_date,end_date))
 
@@ -148,7 +153,7 @@ class ODCalculation():
         end_date=1
         
 
-        for i in range(1,7):
+        for i in range(1,7): # Using only 6 cores
 
             if i==1:
                 start_year=self_.year
@@ -198,13 +203,12 @@ class ODCalculation():
 if __name__=='__main__':
     
     obj=ODCalculation()
-    for i in range(1,13):
-        obj.month=i
+    for month in obj.month:
 
         print(f"""
         <OD Calculation Parameters>
         Year: {obj.year}
-        Month: {obj.month}
+        Month: {month}
         Radius: {obj.radius}
         \n
         """)
@@ -213,36 +217,33 @@ if __name__=='__main__':
 
         print(f'{start_time}: Fetching data from Database')
         
-        """with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-            
-            future1 = executor.submit(fetchData, 2021,2021,1,1,1,4)
-            future2 = executor.submit(fetchData, 2021,2021,1,1,4,8)
-            future3 = executor.submit(fetchData, 2021,2021,1,1,8,12)
-            future4 = executor.submit(fetchData, 2021,2021,1,1,12,16)
-            future5 = executor.submit(fetchData, 2021,2021,1,1,16,20)
-            future6 = executor.submit(fetchData, 2021,2021,1,1,20,24)
-            future7 = executor.submit(fetchData, 2021,2021,1,1,24,28)
-            future8 = executor.submit(fetchData, 2021,2021,1,2,28,1)"""
             
 
         args=[]
 
-        if obj.month=='all':
+        if month=='all':
             args=obj.getMonthlyDivsion()
+            
             print(f'{args}')
-            with multiprocessing.Pool(obj.cpu_cores) as pool:
+            with multiprocessing.Pool(6) as pool:
                 results = pool.starmap(fetchData, args)
 
+            print(f'{datetime.now()}: Data Concatination')
             result1, result2, result3, result4,result5, result6 = results
-            obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6])
+            
+            obj.raw_df=pd.concat([result1, result2, result3, result4,result5, result6])
+            print(f'{datetime.now()}: Data Concatination Completed')
         else:
-            args=obj.getDatesDivision()
+            args=obj.getDatesDivision(month)
             print(f'{args}')
             with multiprocessing.Pool(obj.cpu_cores) as pool:
                 results = pool.starmap(fetchData, args)
 
+            print(f'{datetime.now()}: Data Concatination')
             result1, result2, result3, result4,result5, result6, result7, result8 = results
+            
             obj.raw_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+            print(f'{datetime.now()}: Data Concatination Completed')
 
 
         
@@ -298,13 +299,13 @@ if __name__=='__main__':
 
         print(f'{datetime.now()} Stop Node Detection Completed\n')
 
-        #fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv'
+        #fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv'
 
         #stdf.to_csv(fname,index=False)
 
         obj.saveFile(
             path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
-            fname=f'huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            fname=f'huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             df=stdf
         )
         
@@ -316,7 +317,7 @@ if __name__=='__main__':
         #                                                                                #
         ##################################################################################
         #print('Starting')
-        #stdf=pd.read_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes\\huq_stop_nodes_{obj.year}_{obj.month}_{obj.radius}m_5min_100m.csv',parse_dates=['datetime','leaving_datetime']) #Delete
+        #stdf=pd.read_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes\\huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_5min_100m.csv',parse_dates=['datetime','leaving_datetime']) #Delete
         #temp_users=list(pd.read_csv('D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\2022\\test_users.csv')['uid'].values) #Delete
 
         #stdf=stdf[stdf['uid'].isin(temp_users)] #Delete
@@ -364,12 +365,12 @@ if __name__=='__main__':
 
         print(f'{datetime.now()} Flow Generation Completed\n')
 
-        #flow_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips\huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',index=False)
+        #flow_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips\huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',index=False)
 
 
         obj.saveFile(
             path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
-            fname=f'huq_trips_{obj.year}_{obj.month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            fname=f'huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             df=flow_df
         )
 
