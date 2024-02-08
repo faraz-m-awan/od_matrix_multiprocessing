@@ -25,6 +25,7 @@ from datetime import datetime
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
+from multiprocessing import Pool, Manager
 
 ####################################################
 #                                                  #
@@ -42,7 +43,7 @@ class ODCalculation():
 
     year=2019
     month=['all'] #[i for i in range(1,13)] month number | ['all']
-    radius=500
+    radius=200
     time_th=5
     impr_acc=100
     cpu_cores=8 # Cores to be used for multiprocessing
@@ -197,15 +198,17 @@ if __name__=='__main__':
             results = list(executor.map(fetchData, query))
 
         print(f'{datetime.now()}: Data Concatination')
-        obj.raw_df=pd.concat(results)
+        #obj.raw_df=pd.concat(results)
+        traj_df=pd.concat(results)
         print(f'{datetime.now()}: Data Concatination Completed')
 
+
         print(f'{datetime.now()}: Data fetching completed\n\n')
-        print(f'Number of Records: {obj.raw_df.shape[0]}')
+        print(f'Number of Records: {traj_df.shape[0]}')
     
 
         # Converting Raw DataFrame into a Trajectory DataFrame
-        traj_df= TrajDataFrame(obj.raw_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
+        traj_df= TrajDataFrame(traj_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
         tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
 
 
@@ -240,8 +243,11 @@ if __name__=='__main__':
         with multiprocessing.Pool(obj.cpu_cores) as pool:
             results = pool.starmap(stop_node_process, args)
 
+        del tdf_collection
+
         result1, result2, result3, result4,result5, result6, result7, result8 = results
         stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
+
         print(f'{datetime.now()} Stop Node Detection Completed\n')
         
         # Saving Stop Nodes
@@ -249,10 +255,13 @@ if __name__=='__main__':
             path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
             fname=f'huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
-            #fname=f'val_stop_nodes_{obj.radius}m_{obj.year}.csv',
+            #fname=f'new_code_val_stop_nodes_{obj.radius}m_{obj.year}.csv',
             df=stdf
         )
         
+        #stdf=pd.read_csv(
+        #    f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\stop_nodes\\huq_stop_nodes_{obj.year}_all_{obj.radius}m_5min_100m.csv',
+        #    parse_dates=['datetime','leaving_datetime'])
 
 
         ##################################################################################
@@ -269,15 +278,26 @@ if __name__=='__main__':
         stdf=stdf.dropna(subset=['dest_lat'])
 
         #Indexing Raw Data
-        obj.raw_df.set_index(['uid','datetime'],inplace=True)
-        obj.raw_df.sort_index(inplace=True)      
+        #obj.raw_df.set_index(['uid','datetime'],inplace=True)
+        #obj.raw_df.sort_index(inplace=True)      
         tdf_collection= obj.getLoadBalancedBuckets(stdf,obj.cpu_cores)
         
         print(f'{datetime.now()}: Generating args')
         args=[]
         #[(tdf,obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())]) for tdf in tdf_collection]
         for tdf in tdf_collection:
-            args.append((tdf,obj.raw_df.copy()))
+            #temp_raw_df=obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())].copy()
+            #temp_raw_df.set_index(['uid','datetime'],inplace=True)
+            #temp_raw_df.sort_index(inplace=True) 
+
+            temp_raw_df=traj_df[traj_df['uid'].isin(tdf['uid'].unique())].copy()
+            temp_raw_df.set_index(['uid','datetime'],inplace=True)
+            temp_raw_df.sort_index(inplace=True) 
+            args.append((tdf,temp_raw_df))
+
+        
+        
+        del tdf_collection
 
         print(f'{datetime.now()}: args Generation Completed')
         print(f'{datetime.now()}: Flow Generation Started\n\n')
@@ -290,15 +310,15 @@ if __name__=='__main__':
 
         # Saving Flow
         obj.saveFile(
-            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
-            #fname=f'huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
-            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
-            fname=f'val_trips_{obj.radius}m_{obj.year}.csv',
+            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
+            fname=f'huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
+            #fname=f'new_code_val_trips_{obj.radius}m_{obj.year}.csv',
             df=flow_df
         )
 
         end_time=datetime.now()
-        print(f'{end_time}: Processed Completed')
+        print(f'{end_time}: Process Completed')
         print(f'\n\nTotal Time Taken: {(end_time-start_time).total_seconds()/60} minutes')
         ##################################################################################
         #                                                                                #
