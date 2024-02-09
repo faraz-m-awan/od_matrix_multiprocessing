@@ -1,48 +1,37 @@
 import psycopg2
 import os
 import pandas as pd
+from datetime import datetime
 
-def fetchDataFromDB(start_year,end_year, start_month,end_month, start_day, end_day):
-    dbname = 'huq'
-    user = 'fa71f'
+
+def fetchData(query):
+
+    dbname = "huq"
+    user = "fa71f"
     password = os.environ.get('CRED')
-    host='172.20.67.43'
-    port = '5432'
-
-    conn = psycopg2.connect(
-        dbname=dbname,
-        user=user,
-        password=password,
-        host=host,
-        port=port
-    )
-    cur = conn.cursor()
-
-    
-    
-    start_date = f"{start_year}-{start_month:02d}-{start_day:02d} "
-    end_date = f"{end_year}-{end_month:02d}-{end_day:02d} "
+    host = "172.20.67.57"
+    port = "5432"
 
 
 
-    cur.execute(
-        f"""
-        SELECT timestamp as datetime, device_iid_hash as uid, impression_lat as lat, impression_lng as lng, impression_acc
-        FROM by_year.huq_gla_{start_year}_v1_2
-        WHERE timestamp >= '{start_date}' and timestamp <'{end_date}'
-        """
-    )
 
-    results = cur.fetchall()
-    cols = [desc[0] for desc in cur.description]
+    try:
+        print(f'{datetime.now()}: Connecting Database')
+        connection = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
+        print(f'{datetime.now()}: Connection Established')
+        cur = connection.cursor()
 
-    cur.close()
-    conn.close()
+        cur.execute(query)
+        result = cur.fetchall()
+        print(f'{datetime.now()}: Batch Size={len(result)}')
+        cols = [desc[0] for desc in cur.description]
 
-    return pd.DataFrame(results, columns=cols)
-
-def fetchData(start_year, end_year, start_month, end_month, start_day, end_day):
-    return fetchDataFromDB(start_year,end_year, start_month, end_month,start_day, end_day)
+        return pd.DataFrame(result,columns=cols)
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        if connection:
+            connection.close()
 
 
 
