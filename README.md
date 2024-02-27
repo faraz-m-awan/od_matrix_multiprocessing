@@ -20,6 +20,7 @@ In order to generate OD and derived products, following two files need to be run
   - Calculate SIMD and Council weights
   - Calculate activity weights
   - Generate OD containing detected trips, simd-council weighted trips, activity weighted trips, and simd-council-activity-weighted trips
+
 **2. quarter_trip_extrapolation.ipynb (Quarter)**: This notebook performs the same operations as *trip_extrapolation.py* file except it generates the product on quarter level isntead of annually. So, If someone wants on quarter level, insted of using *trip_exptrapolation.ipynb* file, run this file.
 
     **Note** : *quarter_trip_extrapolation.ipynb* file is not multiprocessing enabled file
