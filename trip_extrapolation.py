@@ -550,14 +550,12 @@ if __name__=='__main__':
 
             weighted_trips=getWeights(geo_df,hldf,adult_population,origin_col,destination_col,active_day_df)
 
-            weighted_trips.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_code_version_weighted_trips_{radius}m_{year}.csv',index=False)
-
-            exit()
-            t_cols=weighted_trips.columns
-            print(geo_df.columns)
-            print(weighted_trips.columns)
-            od_trip_df=geo_df.merge(weighted_trips[['uid',origin_col,destination_col,'trips','activity_weight','simd_weight','council_weight']],how='left',left_on=['uid',origin_col,destination_col],right_on=['uid',origin_col,destination_col])
-            t_cols=od_trip_df.columns
+        
+            #od_trip_df=geo_df.merge(weighted_trips[['uid',origin_col,destination_col,'trips','activity_weight','simd_weight','council_weight']],how='left',left_on=['uid',origin_col,destination_col],right_on=['uid',origin_col,destination_col])
+            
+            # od_trip_df=geo_df.merge(weighted_trips[['uid','activity_weight','simd_weight','council_weight']],how='left',on='uid')
+            # od_trip_df['simd_weight']=od_trip_df['simd_weight'].fillna(1)
+            # od_trip_df['council_weight']=od_trip_df['council_weight'].fillna(1)
 
             
 
@@ -642,7 +640,7 @@ if __name__=='__main__':
                     ]
 
 
-            huq_population= len(od_trip_df['uid'].unique())
+            huq_population= len(geo_df['uid'].unique())
             adult_population= adult_population['Total'].sum()
 
             # Producing 5 Type of OD Matrices
@@ -653,24 +651,29 @@ if __name__=='__main__':
             # Type 5: Others
 
             od_type=['type5']#'type1','type2','type3','type4','type5']
-            backup_od_trip_df=od_trip_df.copy()
+            backup_geo_df=geo_df.copy()
             for typ in od_type:
-                od_trip_df=backup_od_trip_df.copy()
+                geo_df=backup_geo_df.copy()
+                #od_trip_df
 
                 print(f'{datetime.now()}: Generating {typ} OD Matrix')
                 
                 if typ=='type1':
-                    od_trip_df=od_trip_df[(od_trip_df['org_leaving_time'].dt.hour>=7)&(od_trip_df['org_leaving_time'].dt.hour<=10) & (od_trip_df['org_leaving_time'].dt.dayofweek<5)]
+                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=7)&(geo_df['org_leaving_time'].dt.hour<=10) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type2':
-                    od_trip_df=od_trip_df[(od_trip_df['org_leaving_time'].dt.hour>=16)&(od_trip_df['org_leaving_time'].dt.hour<=19) & (od_trip_df['org_leaving_time'].dt.dayofweek<5)]
+                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=16)&(geo_df['org_leaving_time'].dt.hour<=19) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type3':
-                    od_trip_df=od_trip_df[(od_trip_df['org_leaving_time'].dt.hour>=10)&(od_trip_df['org_leaving_time'].dt.hour<=14) & (od_trip_df['org_leaving_time'].dt.dayofweek<5)]
+                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type4':
-                    od_trip_df=od_trip_df[(od_trip_df['org_leaving_time'].dt.hour>=10)&(od_trip_df['org_leaving_time'].dt.hour<=14)&(od_trip_df['org_leaving_time'].dt.dayofweek>=5)]
+                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14)&(geo_df['org_leaving_time'].dt.dayofweek>=5)]
+                
 
+                od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+                # save it for validation
+                od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_code_{radius}m_{year}_validation.csv',index=False)    
+                exit()
 
-
-
+                od_trip_df=od_trip_df.merge(weighted_trips[['uid','activity_weight','simd_weight','council_weight']],how='left',on='uid')
 
                 agg_od_df=od_trip_df.groupby([origin_col,destination_col]).agg(
 
