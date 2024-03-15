@@ -669,11 +669,16 @@ if __name__=='__main__':
                 
 
                 od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
-                # save it for validation
-                od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_code_{radius}m_{year}_validation.csv',index=False)    
-                exit()
+             
 
                 od_trip_df=od_trip_df.merge(weighted_trips[['uid','activity_weight','simd_weight','council_weight']],how='left',on='uid')
+                od_trip_df['simd_weight']=od_trip_df['simd_weight'].fillna(1)
+                od_trip_df['council_weight']=od_trip_df['council_weight'].fillna(1)
+                od_trip_df.reset_index(drop=True,inplace=True)
+
+                od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_code.csv',index=False)
+
+                exit()
 
                 agg_od_df=od_trip_df.groupby([origin_col,destination_col]).agg(
 
