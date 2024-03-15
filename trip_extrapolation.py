@@ -486,13 +486,12 @@ if __name__=='__main__':
 
             geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
 
-            geo_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\old_geo_df.csv',index=False)
-            exit()
+      
 
             od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
 
-            # od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\old_code_{radius}m_{year}_validation.csv',index=False)
-            # exit()
+            od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\old_od_trip_df.csv',index=False)
+            exit()
 
             od_trip_df=(
             od_trip_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
