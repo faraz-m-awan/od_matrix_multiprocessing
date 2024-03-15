@@ -544,8 +544,7 @@ if __name__=='__main__':
 
             print(f'{datetime.now()}: OD Calculation Started')
             geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
-            geo_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_geo_df_.csv',index=False)
-            exit()
+            
             hlfile=f'D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\homelocations_huq_{year}_subset_joined.csv'
             hldf=pd.read_csv(hlfile)
             adult_population = pd.read_csv(f"D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\\adultpopulation.csv") # Reading adult population file
@@ -670,8 +669,13 @@ if __name__=='__main__':
                     geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14)&(geo_df['org_leaving_time'].dt.dayofweek>=5)]
                 
 
-                od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
                 
+                #geo_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_geo_df_.csv',index=False)
+                # Same Till Here
+                od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+                od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\new_od_trip_df_.csv',index=False)
+                exit()
+
 
 
                
