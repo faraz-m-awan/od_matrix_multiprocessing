@@ -97,8 +97,8 @@ if __name__=='__main__':
 
     print(f'{datetime.now()}: Loading Shape File Finished')
 
-    years=[2019,2020,2021,2022]
-    rad=[200,500]
+    years=[2019]
+    rad=[500]
 
     for year in years:
         for radius in rad:
@@ -106,7 +106,7 @@ if __name__=='__main__':
             month= 'all'
             #radius=200
             cpu_cores=8
-            geography_level='council'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+            geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
             weighting_type='annual'     # annual | quarter
             total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
             save_drived_products=False
@@ -151,7 +151,10 @@ if __name__=='__main__':
             else:
                 
                 fname=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips\\huq_trips_{year}_{month}_{radius}m_5min_100m.csv' #fname=f'U:\\Projects\\Huq\\Faraz\\final_OD\\{year}\\trips\\huq_trips_{year}_all_{radius}m_5min_100m.csv'  #
-                df= pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
+                #df= pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'])
+                for tdf in pd.read_csv(fname,parse_dates=['org_arival_time','org_leaving_time','dest_arival_time'],chunksize=10_000):
+                    df=tdf
+                    break
 
 
                 print(f'{datetime.now()}: Trip Data Loading Completed')
@@ -550,6 +553,10 @@ if __name__=='__main__':
             od_trip_df['simd_weight']=od_trip_df['simd_weight'].fillna(1)
             od_trip_df['council_weight']=od_trip_df['council_weight'].fillna(1)
             od_trip_df['activity_weight']= total_days/od_trip_df['total_active_days']
+
+            od_trip_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation\\old_code_version_weighted_trips_{radius}m_{year}.csv',index=False)
+
+            exit()
 
 
             if weighting_type=='annual':
