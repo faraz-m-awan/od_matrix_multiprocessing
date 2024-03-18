@@ -164,13 +164,11 @@ if __name__=='__main__':
     print(f'{datetime.now()}: Loading Shape File Finished')
 
     years=[2019,2020,2021,2021]#,2020,2021,2022]
-    rad=[500]
+    rad=[500,200]
 
     for year in years:
         for radius in rad:
-            #year=2019
             month= 'all'
-            #radius=200
             cpu_cores=8
             geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
             weighting_type='annual'     # annual | quarter
@@ -187,13 +185,13 @@ if __name__=='__main__':
 
             print(f"""
             ****************************************************
-            * Calculation Parameters                           *
-            * Year: {year}                                     * 
-            * Month: {month}                                   *                                        
-            * Radius: {radius}m                                *
-            * Geography Level: {geography_level}               *
-            * Weighting Type: {weighting_type}                 *
-            * Total Days: {total_days}                         *
+            - Calculation Parameters                           
+            - Year: {year}                                      
+            - Month: {month}                                                                           
+            - Radius: {radius}m                                
+            - Geography Level: {geography_level}               
+            - Weighting Type: {weighting_type}                 
+            - Total Days: {total_days}                         
             ****************************************************
             """)
 
@@ -206,7 +204,7 @@ if __name__=='__main__':
 
             if year==2021:
                 df=[]
-                root=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trips'
+                root=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\\trips'
                 files=[f'{root}\\{f}' for f in os.listdir(root) if str(radius) in f ]
                 print(f'{datetime.now()}: Combining and Loading Trip Data')
                 for file in tqdm(files):
@@ -589,9 +587,12 @@ if __name__=='__main__':
             hldf=pd.read_csv(hlfile)
             adult_population = pd.read_csv(f"D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\\adultpopulation.csv") # Reading adult population file
 
+
+            print(f'{datetime.now()}: Calculating Weights')
             weighted_trips=getWeights(geo_df,hldf,adult_population,origin_col,destination_col,active_day_df)
             weighted_trips=weighted_trips[['uid','simd_weight','council_weight','activity_weight']]
             weighted_trips.drop_duplicates(subset='uid',keep='first',inplace=True)
+            print(f'{datetime.now()}: Weights Calculated')
 
             if weighting_type=='annual':
                 cols=[
@@ -628,11 +629,14 @@ if __name__=='__main__':
                 elif typ=='type4':
                     geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14)&(geo_df['org_leaving_time'].dt.dayofweek>=5)]
              
+                print(f'{datetime.now()}: Generating OD trip DF')
                 od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+                print(f'{datetime.now()}: Adding weights to OD trips')
                 od_trip_df=od_trip_df.merge(weighted_trips[['uid','activity_weight','simd_weight','council_weight']],how='left',left_on='uid',right_on='uid')
                 od_trip_df['simd_weight']=od_trip_df['simd_weight'].fillna(1)
                 od_trip_df['council_weight']=od_trip_df['council_weight'].fillna(1)
                 od_trip_df.reset_index(drop=True,inplace=True)
+                print(f'{datetime.now()}: Aggregating trips')
                 agg_od_df=od_trip_df.groupby([origin_col,destination_col]).agg(
 
                     trips=('trips', 'sum'),
@@ -664,12 +668,9 @@ if __name__=='__main__':
                     'act_cncl_weighted_trips',
                     'percentage'
                 ]]
-
-
-
                 
                 saveFile(
-                    path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\od_matrix',
+                    path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
                     fname=f'{typ}_od_{geography_level}_{radius}m_{year}.csv',
                     df=agg_od_df
                 )
