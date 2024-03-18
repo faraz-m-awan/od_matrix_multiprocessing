@@ -5,6 +5,7 @@ from shapely.geometry import  Point
 import os
 from os.path import  join, isfile
 import numpy as np
+import itertools
 import json
 from datetime import datetime
 from spatial_join import performSpatialjoin, spatialJoin
@@ -149,31 +150,43 @@ def getWeights(geo_df,hldf,adult_population,origin_col,destination_col,active_da
 
 if __name__=='__main__':
 
+    cpu_cores=8
+    geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    weighting_type='annual'     # annual | quarter
+    month= 'all'                # all | 1-12
+    total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
+    save_drived_products=False
+
+    """
+    In case of Intermediate Zone Level, we need to create all possible OD Combinations 
+    as we don't have trips detected for certain OD pairs and they are not present in the 
+    final OD matrix file, ultimately having different number of OD pairs in each year
+    """
+    
     # Loading Glasgow City Region Shapefile
 
     start_time=datetime.now()
     print(f'{start_time}: Loading Shape File')
-
     shape_file=f'D:\Mobile Device Data\Boundries\latest_boundries\\all_processed_boundries\\all_boundaries_gcr.gpkg'
     shape=gpd.read_file(shape_file)
-
-    
     shape=shape.to_crs('EPSG:4326')
     shape.sindex
+    
+    if geography_level=='iz': 
+        
+        izs=list(shape['iz_id'].unique())
+        od_comb=list(itertools.product(izs,repeat=2))
+        od_comb=pd.DataFrame(od_comb,columns=['origin','destination'])
 
     print(f'{datetime.now()}: Loading Shape File Finished')
 
-    years=[2019,2020,2021,2021]#,2020,2021,2022]
-    rad=[500,200]
+    years=[2019,2020,2021,2022]
+    rad=[200,500]
 
     for year in years:
         for radius in rad:
-            month= 'all'
-            cpu_cores=8
-            geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
-            weighting_type='annual'     # annual | quarter
-            total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
-            save_drived_products=False
+            
+            
 
             if geography_level=='council':
                 origin_col=f'origin_{geography_level}_area_name'
@@ -582,7 +595,14 @@ if __name__=='__main__':
 
             print(f'{datetime.now()}: OD Calculation Started')
             geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
-            
+
+            od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
+
+            od_trip_df=(
+            od_trip_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
+            .assign(tpad=lambda tdf: tdf['trips']/tdf['total_active_days'])
+            )
+
             hlfile=f'D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\homelocations_huq_{year}_subset_joined.csv'
             hldf=pd.read_csv(hlfile)
             adult_population = pd.read_csv(f"D:\Mobile Device Data\OD_calculation_latest_work\\aux_files\\adultpopulation.csv") # Reading adult population file
@@ -668,12 +688,44 @@ if __name__=='__main__':
                     'act_cncl_weighted_trips',
                     'percentage'
                 ]]
+
+
+            ##################################################################################
+            #                                                                                #
+            #                       Expanding Trips for IZ level                             #
+            #                                                                                #
+            ##################################################################################
+
+                """
+                Generating all the possible OD combinations for Intermediate Zone Level and joining them with the aggregated OD matrix.
+                The resultant OD matrix will contain all the possible OD pairs with detected trips and zero trips for the rest of the OD pairs
+                """
                 
+                if geography_level=='iz':
+                    agg_od_df=od_comb.merge(agg_od_df,how='left',left_on=['origin','destination'],right_on=[origin_col,destination_col])
+                    agg_od_df.drop(columns=[origin_col,destination_col],inplace=True)
+                    agg_od_df['year'].fillna(year,inplace=True)
+                    agg_od_df['distance_threshold'].fillna(radius,inplace=True)
+                    agg_od_df['geography_level'].fillna(geography_level,inplace=True)
+                    agg_od_df['year']=agg_od_df['year'].astype(int)
+                    agg_od_df['distance_threshold']=agg_od_df['distance_threshold'].astype(int)
+                    agg_od_df.fillna(0,inplace=True)
+                    agg_od_df=agg_od_df[
+                        ['year', 'distance_threshold','geography_level',
+                        'origin', 'destination', 'trips','activity_weighted_trips',
+                        'council_weighted_trips', 'act_cncl_weighted_trips', 'percentage']]
+
+                    saveFile(
+                        path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
+                        fname=f'expanded_{typ}_od_{geography_level}_{radius}m_{year}.csv',
+                        df=agg_od_df
+                        )
+
                 saveFile(
                     path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
                     fname=f'{typ}_od_{geography_level}_{radius}m_{year}.csv',
                     df=agg_od_df
-                )
+                    )
 
 
             print(f'{datetime.now()}: OD Saved')
