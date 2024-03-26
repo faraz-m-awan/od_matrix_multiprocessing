@@ -628,11 +628,10 @@ if __name__=='__main__':
             # Producing 5 Type of OD Matrices
             # Type 1: AM peak weekdays (7am-10am)
             # Type 2: PM peak weekdays (4 pm-7 pm)
-            # Type 3: Interpeak weekdays (10 am–2 pm) 
-            # Type 4: Interpeak weekends  (10am–2pm)
-            # Type 5: Others
+            # Type 3: Everything
+            # Type 4: Type 3 - (Type 1 + Type 2)
 
-            od_type=['type1','type2','type3','type4','type5']
+            od_type=['type1','type2','type3','type4']
             backup_geo_df=geo_df.copy()
             for typ in od_type:
                 geo_df=backup_geo_df.copy()
@@ -640,14 +639,16 @@ if __name__=='__main__':
 
                 print(f'{datetime.now()}: Generating {typ} OD Matrix')
                 
+                #type1
                 if typ=='type1':
                     geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=7)&(geo_df['org_leaving_time'].dt.hour<=10) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type2':
                     geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=16)&(geo_df['org_leaving_time'].dt.hour<=19) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type3':
-                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
+                    pass #geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14) & (geo_df['org_leaving_time'].dt.dayofweek<5)]
                 elif typ=='type4':
-                    geo_df=geo_df[(geo_df['org_leaving_time'].dt.hour>=10)&(geo_df['org_leaving_time'].dt.hour<=14)&(geo_df['org_leaving_time'].dt.dayofweek>=5)]
+                    geo_df=geo_df[~((geo_df['org_leaving_time'].dt.hour>=7)&(geo_df['org_leaving_time'].dt.hour<=10) & (geo_df['org_leaving_time'].dt.dayofweek<5))]
+                    geo_df=geo_df[~((geo_df['org_leaving_time'].dt.hour>=16)&(geo_df['org_leaving_time'].dt.hour<=19) & (geo_df['org_leaving_time'].dt.dayofweek<5))]
              
                 print(f'{datetime.now()}: Generating OD trip DF')
                 od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
@@ -677,9 +678,9 @@ if __name__=='__main__':
                 agg_od_df['percentage']= (agg_od_df['act_cncl_weighted_trips']/agg_od_df['act_cncl_weighted_trips'].sum())*100
 
                 agg_od_df=agg_od_df[[
-                    'year',
-                    'distance_threshold',
-                    'geography_level',
+                    #'year',
+                    #'distance_threshold',
+                    #'geography_level',
                     origin_col,
                     destination_col,
                     'trips',
@@ -704,28 +705,36 @@ if __name__=='__main__':
                 if geography_level=='iz':
                     agg_od_df=od_comb.merge(agg_od_df,how='left',left_on=['origin','destination'],right_on=[origin_col,destination_col])
                     agg_od_df.drop(columns=[origin_col,destination_col],inplace=True)
-                    agg_od_df['year'].fillna(year,inplace=True)
-                    agg_od_df['distance_threshold'].fillna(radius,inplace=True)
-                    agg_od_df['geography_level'].fillna(geography_level,inplace=True)
-                    agg_od_df['year']=agg_od_df['year'].astype(int)
-                    agg_od_df['distance_threshold']=agg_od_df['distance_threshold'].astype(int)
+                    #agg_od_df['year'].fillna(year,inplace=True)
+                    #agg_od_df['distance_threshold'].fillna(radius,inplace=True)
+                    #agg_od_df['geography_level'].fillna(geography_level,inplace=True)
+                    #agg_od_df['year']=agg_od_df['year'].astype(int)
+                    #agg_od_df['distance_threshold']=agg_od_df['distance_threshold'].astype(int)
                     agg_od_df.fillna(0,inplace=True)
+                    # agg_od_df=agg_od_df[
+                    #     ['year', 'distance_threshold','geography_level',
+                    #     'origin', 'destination', 'trips','activity_weighted_trips',
+                    #     'council_weighted_trips', 'act_cncl_weighted_trips', 'percentage']]
+
                     agg_od_df=agg_od_df[
-                        ['year', 'distance_threshold','geography_level',
+                        [
                         'origin', 'destination', 'trips','activity_weighted_trips',
-                        'council_weighted_trips', 'act_cncl_weighted_trips', 'percentage']]
+                        'council_weighted_trips', 'act_cncl_weighted_trips', 'percentage'
+                        ]
+                    ]
 
                     saveFile(
                         path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
                         fname=f'expanded_{typ}_od_{geography_level}_{radius}m_{year}.csv',
                         df=agg_od_df
                         )
+                else:
 
-                saveFile(
-                    path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
-                    fname=f'{typ}_od_{geography_level}_{radius}m_{year}.csv',
-                    df=agg_od_df
-                    )
+                    saveFile(
+                        path=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\od_matrix',
+                        fname=f'{typ}_od_{geography_level}_{radius}m_{year}.csv',
+                        df=agg_od_df
+                        )
 
 
             print(f'{datetime.now()}: OD Saved')
