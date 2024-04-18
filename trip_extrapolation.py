@@ -170,18 +170,18 @@ if __name__=='__main__':
     shape_file=f'D:\Mobile Device Data\Boundries\latest_boundries\\all_processed_boundries\\all_boundaries_gcr.gpkg'
     shape=gpd.read_file(shape_file)
     shape=shape.to_crs('EPSG:4326')
+
     shape.sindex
     
     if geography_level=='iz': 
-        
         izs=list(shape['iz_id'].unique())
         od_comb=list(itertools.product(izs,repeat=2))
         od_comb=pd.DataFrame(od_comb,columns=['origin','destination'])
 
     print(f'{datetime.now()}: Loading Shape File Finished')
 
-    years=[2019,2020,2021,2022]
-    rad=[200,500]
+    years=[2019]#[2019,2020,2021,2022]
+    rad=[500]#[200,500]
 
     for year in years:
         for radius in rad:
