@@ -6,10 +6,10 @@ from datetime import datetime
 
 def fetchData(query):
 
-    dbname = "huq"
+    dbname = "fa71f"
     user = "fa71f"
     password = os.environ.get('CRED')
-    host = "172.20.67.57"
+    host = "172.20.67.58"
     port = "5432"
 
 

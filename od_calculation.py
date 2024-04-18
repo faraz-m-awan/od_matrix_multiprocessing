@@ -44,11 +44,12 @@ from flow_generation import generateFlow, processFlowGenration
 class ODCalculation():
 
     year=2019
-    month=['all'] #[i for i in range(1,13)] month number | ['all']
-    radius=200
+    month=[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
+    radius=500
     time_th=5
     impr_acc=100
     cpu_cores=8 # Cores to be used for multiprocessing
+    data_provider='Tamoco' # Huq | Tamoco
 
     def __init__(self_):
         return
@@ -125,25 +126,25 @@ class ODCalculation():
                 if month==12:
                     query.append(
                     f"""
-                    SELECT timestamp as datetime, device_iid_hash as uid, impression_lat as lat, impression_lng as lng, impression_acc
-                    FROM by_year.huq_gla_{year}_v1_2
-                    WHERE timestamp >= '{year}-{month:02d}-{day:02d}' and timestamp <'{year+1}-01-01'
+                    SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+                    FROM db_research_tamoco_by_year.tamoco_{year}
+                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year+1}-01-01'
                     """
                     )
                 else:
                     query.append(
                     f"""
-                    SELECT timestamp as datetime, device_iid_hash as uid, impression_lat as lat, impression_lng as lng, impression_acc
-                    FROM by_year.huq_gla_{year}_v1_2
-                    WHERE timestamp >= '{year}-{month:02d}-{day:02d}' and timestamp <'{year}-{month+1:02d}-01'
+                    SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+                    FROM db_research_tamoco_by_year.tamoco_{year}
+                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month+1:02d}-01'
                     """
                     )
             else:
                 query.append(
                     f"""
-                    SELECT timestamp as datetime, device_iid_hash as uid, impression_lat as lat, impression_lng as lng, impression_acc
-                    FROM by_year.huq_gla_{year}_v1_2
-                    WHERE timestamp >= '{year}-{month:02d}-{day:02d}' and timestamp <'{year}-{month:02d}-{day+5:02d}'
+                    SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+                    FROM db_research_tamoco_by_year.tamoco_{year}
+                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month:02d}-{day+5:02d}'
                     """
                     )
 
@@ -254,8 +255,8 @@ if __name__=='__main__':
         
         # Saving Stop Nodes
         obj.saveFile(
-            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
-            fname=f'huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\stop_nodes',
+            fname=f'{obj.data_provider.lower()}_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
             #fname=f'new_code_val_stop_nodes_{obj.radius}m_{obj.year}.csv',
             df=stdf
@@ -312,8 +313,8 @@ if __name__=='__main__':
 
         # Saving Flow
         obj.saveFile(
-            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
-            fname=f'huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\trips',
+            fname=f'{obj.data_provider.lower()}_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
             #fname=f'new_code_val_trips_{obj.radius}m_{obj.year}.csv',
             df=flow_df
