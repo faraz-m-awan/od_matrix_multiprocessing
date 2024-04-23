@@ -44,7 +44,7 @@ from flow_generation import generateFlow, processFlowGenration
 class ODCalculation():
 
     year=2019
-    month=[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
+    month=[i for i in range(8,13)] #[i for i in range(1,13)] month number | ['all']
     radius=500
     time_th=5
     impr_acc=100
@@ -116,19 +116,48 @@ class ODCalculation():
                     )
                     
         return query
-    def getQueriesForMonthlyProcessing(self_,year,month):
+    def getQueriesForMonthlyProcessing(self_,year,month,chunk):
 
         query=[]
 
-        for day in range(1,31,5): # We are using 6 threads to fetch the data. Each month will be devided into 5 date windows. Each Thread will be responsible for fetching data for its own date window.
+        # for day in range(1,31,5): # We are using 6 threads to fetch the data. Each month will be devided into 5 date windows. Each Thread will be responsible for fetching data for its own date window.
 
-            if day==26:
+        #     if day==26:
+        #         if month==12:
+        #             query.append(
+        #             f"""
+        #             SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+        #             FROM db_research_tamoco_by_year.tamoco_{year}
+        #             WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year+1}-01-01' 
+        #             """
+        #             )
+        #         else:
+        #             query.append(
+        #             f"""
+        #             SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+        #             FROM db_research_tamoco_by_year.tamoco_{year}
+        #             WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month+1:02d}-01'
+        #             """
+        #             )
+        #     else:
+        #         query.append(
+        #             f"""
+        #             SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
+        #             FROM db_research_tamoco_by_year.tamoco_{year}
+        #             WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month:02d}-{day+5:02d}'
+        #             """
+        #             )
+
+        start_date=1+(chunk-1)*6
+        end_date=start_date+6
+        for i in range(start_date,end_date):
+            if chunk==5:
                 if month==12:
                     query.append(
                     f"""
                     SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
                     FROM db_research_tamoco_by_year.tamoco_{year}
-                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year+1}-01-01'
+                    WHERE sdk_ts >= '{year}-{month:02d}-{i:02d}' and sdk_ts <'{year+1}-01-01' 
                     """
                     )
                 else:
@@ -136,18 +165,21 @@ class ODCalculation():
                     f"""
                     SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
                     FROM db_research_tamoco_by_year.tamoco_{year}
-                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month+1:02d}-01'
+                    WHERE sdk_ts >= '{year}-{month:02d}-{i:02d}' and sdk_ts <'{year}-{month+1:02d}-01'
                     """
                     )
+
             else:
                 query.append(
                     f"""
                     SELECT sdk_ts as datetime, hashed_user_id as uid, latitude as lat, longitude as lng, accuracy as impression_acc
                     FROM db_research_tamoco_by_year.tamoco_{year}
-                    WHERE sdk_ts >= '{year}-{month:02d}-{day:02d}' and sdk_ts <'{year}-{month:02d}-{day+5:02d}'
+                    WHERE sdk_ts >= '{year}-{month:02d}-{i:02d}' and sdk_ts <'{year}-{month:02d}-{i+1:02d}'
                     """
-                    )
+                )
 
+
+           
         return query
 
     def saveFile(self_,path,fname,df):
@@ -185,147 +217,150 @@ if __name__=='__main__':
         #                           Fetching Data From DB                                #
         #                                                                                #
         ##################################################################################
+        chunks=[1,2,3,4,5] # Number of chunks to divide the data. Each chunk will be fetched by a seperate thread. Every chunk will contain data of 6 days.
+        for chunk in chunks:
+            
+            print(f'{start_time}: Chunk {chunk} Started')
+            print(f'{start_time}: Fetching data from Database')
+            
 
-        print(f'{start_time}: Fetching data from Database')
+            if month=='all':
+                print('Yearly Processing')
+                query=obj.getQueriesForAllYearProcessing(obj.year)
+            else:
+                print('Monthly Processing')
+                query=obj.getQueriesForMonthlyProcessing(obj.year,month,chunk)
+            
+        
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                results = list(executor.map(fetchData, query))
+
+            print(f'{datetime.now()}: Data Concatination')
+            #obj.raw_df=pd.concat(results)
+            traj_df=pd.concat(results)
+            print(f'{datetime.now()}: Data Concatination Completed')
+
+
+            print(f'{datetime.now()}: Data fetching completed\n\n')
+            print(f'Number of Records: {traj_df.shape[0]}')
         
 
-        if month=='all':
-            print('Yearly Processing')
-            query=obj.getQueriesForAllYearProcessing(obj.year)
-        else:
-            print('Monthly Processing')
-            query=obj.getQueriesForMonthlyProcessing(obj.year,month)
-        
-     
-        with ThreadPoolExecutor(max_workers=6) as executor:
-            results = list(executor.map(fetchData, query))
-
-        print(f'{datetime.now()}: Data Concatination')
-        #obj.raw_df=pd.concat(results)
-        traj_df=pd.concat(results)
-        print(f'{datetime.now()}: Data Concatination Completed')
+            # Converting Raw DataFrame into a Trajectory DataFrame
+            traj_df= TrajDataFrame(traj_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
+            tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
 
 
-        print(f'{datetime.now()}: Data fetching completed\n\n')
-        print(f'Number of Records: {traj_df.shape[0]}')
+            ##################################################################################
+            #                                                                                #
+            #                           Filtering Data Based on                              #
+            #              Impression Accuracy and Speed Between GPS Points                  #
+            #                                                                                #
+            ##################################################################################
+
+            print(f'{datetime.now()}: Filtering Started')
+            args=[(tdf,obj.impr_acc) for tdf in tdf_collection]
+            with multiprocessing.Pool(obj.cpu_cores) as pool:
+                results = pool.starmap(filter_data_process, args)
+
+            #result1, result2, result3, result4,result5, result6, result7, result8 = results
+            traj_df=pd.concat([*results])#pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+            print(f'{datetime.now()}: Filtering Finished\n\n\n')
+
+            ##################################################################################
+            #                                                                                #
+            #                           Stope Node Detection                                 #
+            #                                                                                #
+            ##################################################################################
+
+            print(f'{datetime.now()}: Stop Node Detection Started\n\n')
+            print(f'Detecting stop nodes for the month: {traj_df.datetime.dt.month.unique().tolist()}')
+            print(f'Radius: {obj.radius}\nTime Threshold: {obj.time_th}\nImpression Accuracy: {obj.impr_acc}')
+            tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
+            print(f'{datetime.now()}: Stop Node Detection Started')
+            args=[(tdf,obj.time_th,obj.radius) for tdf in tdf_collection]
+            with multiprocessing.Pool(obj.cpu_cores) as pool:
+                results = pool.starmap(stop_node_process, args)
+
+            del tdf_collection
+
+            #result1, result2, result3, result4,result5, result6, result7, result8 = results
+            stdf=pd.DataFrame(pd.concat([*results]))#pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
+
+            print(f'{datetime.now()} Stop Node Detection Completed\n')
+            
+            # Saving Stop Nodes
+            obj.saveFile(
+                path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\stop_nodes',
+                fname=f'{obj.data_provider.lower()}_stop_nodes_{obj.year}_{month}_{chunk}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+                #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
+                #fname=f'new_code_val_stop_nodes_{obj.radius}m_{obj.year}.csv',
+                df=stdf
+            )
+            
+            #stdf=pd.read_csv(
+            #    f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\stop_nodes\\huq_stop_nodes_{obj.year}_all_{obj.radius}m_5min_100m.csv',
+            #    parse_dates=['datetime','leaving_datetime'])
+
+
+            ##################################################################################
+            #                                                                                #
+            #                           Flow Generation                                      #
+            #                                                                                #
+            ##################################################################################
     
 
-        # Converting Raw DataFrame into a Trajectory DataFrame
-        traj_df= TrajDataFrame(traj_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
-        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
+            stdf.rename(columns={'lat':'org_lat','lng':'org_lng'},inplace=True)
+            stdf['dest_at']=stdf.groupby('uid')['datetime'].transform(lambda x: x.shift(-1))
+            stdf['dest_lat']=stdf.groupby('uid')['org_lat'].transform(lambda x: x.shift(-1))
+            stdf['dest_lng']=stdf.groupby('uid')['org_lng'].transform(lambda x: x.shift(-1))
+            stdf=stdf.dropna(subset=['dest_lat'])
 
+            #Indexing Raw Data
+            #obj.raw_df.set_index(['uid','datetime'],inplace=True)
+            #obj.raw_df.sort_index(inplace=True)      
+            tdf_collection= obj.getLoadBalancedBuckets(stdf,obj.cpu_cores)
+            
+            print(f'{datetime.now()}: Generating args')
+            args=[]
+            #[(tdf,obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())]) for tdf in tdf_collection]
+            for tdf in tdf_collection:
+                #temp_raw_df=obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())].copy()
+                #temp_raw_df.set_index(['uid','datetime'],inplace=True)
+                #temp_raw_df.sort_index(inplace=True) 
 
-        ##################################################################################
-        #                                                                                #
-        #                           Filtering Data Based on                              #
-        #              Impression Accuracy and Speed Between GPS Points                  #
-        #                                                                                #
-        ##################################################################################
+                temp_raw_df=traj_df[traj_df['uid'].isin(tdf['uid'].unique())].copy()
+                temp_raw_df.set_index(['uid','datetime'],inplace=True)
+                temp_raw_df.sort_index(inplace=True) 
+                args.append((tdf,temp_raw_df))
 
-        print(f'{datetime.now()}: Filtering Started')
-        args=[(tdf,obj.impr_acc) for tdf in tdf_collection]
-        with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(filter_data_process, args)
+            
+            
+            del tdf_collection
 
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
-        print(f'{datetime.now()}: Filtering Finished\n\n\n')
+            print(f'{datetime.now()}: args Generation Completed')
+            print(f'{datetime.now()}: Flow Generation Started\n\n')
+            with multiprocessing.Pool(obj.cpu_cores) as pool:
+                results = pool.starmap(generateFlow, args)
 
-        ##################################################################################
-        #                                                                                #
-        #                           Stope Node Detection                                 #
-        #                                                                                #
-        ##################################################################################
+            #result1, result2, result3, result4,result5, result6, result7, result8 = results
+            flow_df=pd.concat([*results]) #pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]) 
+            print(f'{datetime.now()} Flow Generation Completed\n')
 
-        print(f'{datetime.now()}: Stop Node Detection Started\n\n')
-        print(f'Detecting stop nodes for the month: {traj_df.datetime.dt.month.unique().tolist()}')
-        print(f'Radius: {obj.radius}\nTime Threshold: {obj.time_th}\nImpression Accuracy: {obj.impr_acc}')
-        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
-        print(f'{datetime.now()}: Stop Node Detection Started')
-        args=[(tdf,obj.time_th,obj.radius) for tdf in tdf_collection]
-        with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(stop_node_process, args)
+            # Saving Flow
+            obj.saveFile(
+                path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\trips',
+                fname=f'{obj.data_provider.lower()}_trips_{obj.year}_{month}_{chunk}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+                #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
+                #fname=f'new_code_val_trips_{obj.radius}m_{obj.year}.csv',
+                df=flow_df
+            )
 
-        del tdf_collection
-
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
-
-        print(f'{datetime.now()} Stop Node Detection Completed\n')
-        
-        # Saving Stop Nodes
-        obj.saveFile(
-            path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\stop_nodes',
-            fname=f'{obj.data_provider.lower()}_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
-            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
-            #fname=f'new_code_val_stop_nodes_{obj.radius}m_{obj.year}.csv',
-            df=stdf
-        )
-        
-        #stdf=pd.read_csv(
-        #    f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\stop_nodes\\huq_stop_nodes_{obj.year}_all_{obj.radius}m_5min_100m.csv',
-        #    parse_dates=['datetime','leaving_datetime'])
-
-
-        ##################################################################################
-        #                                                                                #
-        #                           Flow Generation                                      #
-        #                                                                                #
-        ##################################################################################
- 
-
-        stdf.rename(columns={'lat':'org_lat','lng':'org_lng'},inplace=True)
-        stdf['dest_at']=stdf.groupby('uid')['datetime'].transform(lambda x: x.shift(-1))
-        stdf['dest_lat']=stdf.groupby('uid')['org_lat'].transform(lambda x: x.shift(-1))
-        stdf['dest_lng']=stdf.groupby('uid')['org_lng'].transform(lambda x: x.shift(-1))
-        stdf=stdf.dropna(subset=['dest_lat'])
-
-        #Indexing Raw Data
-        #obj.raw_df.set_index(['uid','datetime'],inplace=True)
-        #obj.raw_df.sort_index(inplace=True)      
-        tdf_collection= obj.getLoadBalancedBuckets(stdf,obj.cpu_cores)
-        
-        print(f'{datetime.now()}: Generating args')
-        args=[]
-        #[(tdf,obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())]) for tdf in tdf_collection]
-        for tdf in tdf_collection:
-            #temp_raw_df=obj.raw_df[obj.raw_df['uid'].isin(tdf['uid'].unique())].copy()
-            #temp_raw_df.set_index(['uid','datetime'],inplace=True)
-            #temp_raw_df.sort_index(inplace=True) 
-
-            temp_raw_df=traj_df[traj_df['uid'].isin(tdf['uid'].unique())].copy()
-            temp_raw_df.set_index(['uid','datetime'],inplace=True)
-            temp_raw_df.sort_index(inplace=True) 
-            args.append((tdf,temp_raw_df))
-
-        
-        
-        del tdf_collection
-
-        print(f'{datetime.now()}: args Generation Completed')
-        print(f'{datetime.now()}: Flow Generation Started\n\n')
-        with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(generateFlow, args)
-
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        flow_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
-        print(f'{datetime.now()} Flow Generation Completed\n')
-
-        # Saving Flow
-        obj.saveFile(
-            path=f'U:\\Projects\\{obj.data_provider}\Faraz\\final_OD_work\\{obj.year}\\trips',
-            fname=f'{obj.data_provider.lower()}_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
-            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
-            #fname=f'new_code_val_trips_{obj.radius}m_{obj.year}.csv',
-            df=flow_df
-        )
-
-        end_time=datetime.now()
-        print(f'{end_time}: Process Completed')
-        print(f'\n\nTotal Time Taken: {(end_time-start_time).total_seconds()/60} minutes')
-        ##################################################################################
-        #                                                                                #
-        #                           Trips Extrapolation                                  #
-        #                                                                                #
-        ##################################################################################
+            end_time=datetime.now()
+            print(f'{end_time}: Process Completed')
+            print(f'\n\nTotal Time Taken: {(end_time-start_time).total_seconds()/60} minutes')
+            ##################################################################################
+            #                                                                                #
+            #                           Trips Extrapolation                                  #
+            #                                                                                #
+            ##################################################################################
         

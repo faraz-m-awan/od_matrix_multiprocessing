@@ -151,11 +151,12 @@ def getWeights(geo_df,hldf,adult_population,origin_col,destination_col,active_da
 if __name__=='__main__':
 
     cpu_cores=8
-    geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
-    weighting_type='annual'     # annual | quarter
-    month= 'all'                # all | 1-12
+    geography_level='council'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    weighting_type='month'     # annual | quarter | month
+    month= [i for i in range(1,13)]                # all | [i for i in range(1,13)]
     total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
     save_drived_products=False
+    data_provider='Tamoco' # Tamoco | Huq
 
     """
     In case of Intermediate Zone Level, we need to create all possible OD Combinations 
@@ -215,9 +216,9 @@ if __name__=='__main__':
             #############################################################
             print(f'{datetime.now()}: Loading Trip Data')
 
-            if year==2021:
+            if year==2021 or data_provider=='Tamoco':
                 df=[]
-                root=f'U:\Projects\Huq\Faraz\\final_OD_work\\{year}\\trips'
+                root=f'U:\Projects\{data_provider}\Faraz\\final_OD_work\\{year}\\trips'
                 files=[f'{root}\\{f}' for f in os.listdir(root) if str(radius) in f ]
                 print(f'{datetime.now()}: Combining and Loading Trip Data')
                 for file in tqdm(files):
@@ -251,10 +252,10 @@ if __name__=='__main__':
             with multiprocessing.Pool(cpu_cores) as pool:
                 results = pool.starmap(performSpatialjoin, args)
 
-            result1, result2, result3, result4,result5, result6, result7, result8 = results
+            #result1, result2, result3, result4,result5, result6, result7, result8 = results
             
             #traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
-            df_collection=[result1,result2,result3,result4,result5,result6,result7,result8]
+            df_collection=[*results]#[result1,result2,result3,result4,result5,result6,result7,result8]
 
             print(f'{datetime.now()}: Spatial Join for Origin Finished')
 
@@ -271,9 +272,9 @@ if __name__=='__main__':
             with multiprocessing.Pool(cpu_cores) as pool:
                 results = pool.starmap(performSpatialjoin, args)
 
-            result1, result2, result3, result4,result5, result6, result7, result8 = results
+            #result1, result2, result3, result4,result5, result6, result7, result8 = results
             
-            geo_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+            geo_df=pd.concat([*results])#pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
             
 
             print(f'{datetime.now()}: Spatial Join for Destination Finished')
@@ -323,7 +324,7 @@ if __name__=='__main__':
                ).reset_index()
 
             print(f'{datetime.now()}: Saving disclosure analysis file')
-            analysis_df.to_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\trip_analysis_{geography_level}_{radius}m_{year}.csv')
+            analysis_df.to_csv(f'U:\\Projects\{data_provider}\Faraz\\final_OD_work\{year}\\data_analysis_files\\trip_analysis_{geography_level}_{radius}m_{year}.csv')
             print(f'{datetime.now()}: Done')
             
             ############################################################
@@ -358,7 +359,7 @@ if __name__=='__main__':
             geo_df=geo_df.assign(total_trips=lambda df: df.groupby('uid')['trip_id'].transform(lambda x: len(x)))
             geo_df['quarter']=geo_df.groupby(['uid','month'])['month'].transform(getQuarter)
 
-            geo_df.drop(columns=['month'],inplace=True)
+            #geo_df.drop(columns=['month'],inplace=True)
 
             print(f'{datetime.now()}: Trips/User Calculated')
 
