@@ -41,7 +41,7 @@ from flow_generation import generateFlow, processFlowGenration
 
 class ODCalculation():
 
-    year=2019
+    year=2023
     month=['all'] #[i for i in range(1,13)] month number | ['all']
     radius=200
     time_th=5
@@ -194,7 +194,7 @@ if __name__=='__main__':
             query=obj.getQueriesForMonthlyProcessing(obj.year,month)
         
      
-        with ThreadPoolExecutor(max_workers=6) as executor:
+        with ThreadPoolExecutor(max_workers=8) as executor:
             results = list(executor.map(fetchData, query))
 
         print(f'{datetime.now()}: Data Concatination')

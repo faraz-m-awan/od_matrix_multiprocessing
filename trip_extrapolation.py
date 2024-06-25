@@ -151,7 +151,7 @@ def getWeights(geo_df,hldf,adult_population,origin_col,destination_col,active_da
 if __name__=='__main__':
 
     cpu_cores=8
-    geography_level='iz'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
+    geography_level='council'   # oa= Ouput Area | dz= Data Zone | iz= Intermediate Zone | council= Council Level
     weighting_type='annual'     # annual | quarter
     month= 'all'                # all | 1-12
     total_days=365              # In terms of Annual Weighting=365 | Quarter weighting = total number of days in a quarter
@@ -180,8 +180,8 @@ if __name__=='__main__':
 
     print(f'{datetime.now()}: Loading Shape File Finished')
 
-    years=[2019,2020,2021,2022]
-    rad=[200,500]
+    years=[2023]
+    rad=[500]
 
     for year in years:
         for radius in rad:
@@ -235,6 +235,8 @@ if __name__=='__main__':
                 #     break
 
                 print(f'{datetime.now()}: Trip Data Loading Completed')
+                print(f'{datetime.now()}: Total Trips: {len(df)}')
+                print(f'{datetime.now()}: Total Users: {len(df["uid"].unique())}')
             
             
 
@@ -277,6 +279,18 @@ if __name__=='__main__':
             
 
             print(f'{datetime.now()}: Spatial Join for Destination Finished')
+
+
+            #############################################################
+            #                                                           #
+            #                  Delete the following code                #
+            #                                                           #
+            #############################################################
+
+            geo_df.to_csv(f'U:\\Projects\\Huq\\Faraz\\final_OD_work\\{year}\\trips\\temp_trip_{radius}m_{year}.csv',index=False)
+
+
+            #############################################################
 
             #############################################################
             #                                                           #
@@ -369,7 +383,7 @@ if __name__=='__main__':
             #############################################################
 
             print(f'{datetime.now()}: Calculating TPAD')
-            active_day_df=pd.read_csv(f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\active_days_stat_{year}.csv')
+            active_day_df=pd.read_csv(f'U:\\Projects\\Huq\\Faraz\\final_OD_work\\{year}\\active_days_stat_{year}.csv')
             geo_df=(
                 geo_df.merge(active_day_df,how='left',left_on='uid',right_on='uid')
                 .assign(tpad=lambda tdf: tdf['total_trips']/tdf['total_active_days'])
@@ -596,6 +610,10 @@ if __name__=='__main__':
             print(f'{datetime.now()}: OD Calculation Started')
             geo_df=geo_df[(geo_df['total_active_days']>=7)&(geo_df['tpad']>=0.2)] # Filtering based on number of active days and trips/active day
 
+            print(f'{datetime.now()}: Total Trips: {len(geo_df)}')
+            print(f'{datetime.now()}: Total Users: {len(geo_df["uid"].unique())}')
+            print(f'{datetime.now()}: TPAD: {geo_df["tpad"].describe()}')
+
             od_trip_df=pd.DataFrame(geo_df.groupby(['uid',origin_col,destination_col]).apply(lambda x: len(x)),columns=['trips']).reset_index() # Get number of Trips between orgins and destination for individual users
 
             od_trip_df=(
@@ -631,7 +649,7 @@ if __name__=='__main__':
             # Type 3: Everything
             # Type 4: Type 3 - (Type 1 + Type 2)
 
-            od_type=['type1','type2','type3','type4']
+            od_type=['type3'] #['type1','type2','type3','type4']
             backup_geo_df=geo_df.copy()
             for typ in od_type:
                 geo_df=backup_geo_df.copy()
