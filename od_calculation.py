@@ -43,9 +43,9 @@ class ODCalculation():
 
     year=2023
     month=['all'] #[i for i in range(1,13)] month number | ['all']
-    radius=200
-    time_th=5
-    impr_acc=100
+    radius=200 # Radius in meters for Stop Node Detection
+    time_th=5 # Time Threshold in minutes for Stop Node Detection
+    impr_acc=100 # Impression Accuracy in meters for filtering the data
     cpu_cores=8 # Cores to be used for multiprocessing
 
     def __init__(self_):
@@ -55,7 +55,6 @@ class ODCalculation():
         
         print(f'{datetime.now()}: Getting unique users')
         unique_users=tdf['uid'].unique() # Getting Unique Users in the data
-        
         print(f'{datetime.now()}: Creating sets')
         num_impr_df=pd.DataFrame(tdf.groupby('uid').size(),columns=['num_impressions']).reset_index().sort_values(by=['num_impressions'],ascending=False) # Creating a DataFrame containing Unique UID and Total number of impressions that Unique UID has in the data.
       
@@ -188,18 +187,18 @@ if __name__=='__main__':
 
         if month=='all':
             print('Yearly Processing')
-            query=obj.getQueriesForAllYearProcessing(obj.year)
+            query=obj.getQueriesForAllYearProcessing(obj.year) # Getting the queries for fetching data for the whole year
         else:
             print('Monthly Processing')
-            query=obj.getQueriesForMonthlyProcessing(obj.year,month)
+            query=obj.getQueriesForMonthlyProcessing(obj.year,month) # Getting the queries for fetching data for the month
         
      
         with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(fetchData, query))
+            results = list(executor.map(fetchData, query)) # Fetching data from the database using 8 threads. Each thread will fetch data for a specific date window.
 
         print(f'{datetime.now()}: Data Concatination')
         #obj.raw_df=pd.concat(results)
-        traj_df=pd.concat(results)
+        traj_df=pd.concat(results) # Concatinating the data fetched from the database
         print(f'{datetime.now()}: Data Concatination Completed')
 
 
@@ -209,7 +208,7 @@ if __name__=='__main__':
 
         # Converting Raw DataFrame into a Trajectory DataFrame
         traj_df= TrajDataFrame(traj_df, latitude='lat',longitude='lng',user_id='uid',datetime='datetime') # Coverting raw data into a trajectory dataframe
-        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores)
+        tdf_collection= obj.getLoadBalancedBuckets(traj_df,obj.cpu_cores) # Dividing the data into buckets for multiprocessing
 
 
         ##################################################################################
@@ -222,10 +221,13 @@ if __name__=='__main__':
         print(f'{datetime.now()}: Filtering Started')
         args=[(tdf,obj.impr_acc) for tdf in tdf_collection]
         with multiprocessing.Pool(obj.cpu_cores) as pool:
-            results = pool.starmap(filter_data_process, args)
+            results = pool.starmap(filter_data_process, args) # Filtering the data based on Impression Accuracy and Speed between GPS points
 
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        del tdf_collection # Deleting the data to free up the memory
+        #result1, result2, result3, result4,result5, result6, result7, result8 = results
+        #traj_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        traj_df=pd.concat([*results]) # Concatinating the filtered data from all the processes
+        del results # Deleting the results to free up the memory
         print(f'{datetime.now()}: Filtering Finished\n\n\n')
 
         ##################################################################################
@@ -243,11 +245,12 @@ if __name__=='__main__':
         with multiprocessing.Pool(obj.cpu_cores) as pool:
             results = pool.starmap(stop_node_process, args)
 
-        del tdf_collection
+        del tdf_collection # Deleting the data to free up the memory
 
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
-
+        #result1, result2, result3, result4,result5, result6, result7, result8 = results
+        #stdf=pd.DataFrame(pd.concat([result1,result2,result3,result4,result5,result6,result7,result8]))
+        stdf=pd.DataFrame(pd.concat([*results])) # Concatinating the stop nodes from all the processes
+        del results # Deleting the results to free up the memory
         print(f'{datetime.now()} Stop Node Detection Completed\n')
         
         # Saving Stop Nodes
@@ -304,8 +307,10 @@ if __name__=='__main__':
         with multiprocessing.Pool(obj.cpu_cores) as pool:
             results = pool.starmap(generateFlow, args)
 
-        result1, result2, result3, result4,result5, result6, result7, result8 = results
-        flow_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        #result1, result2, result3, result4,result5, result6, result7, result8 = results
+        #flow_df=pd.concat([result1,result2,result3,result4,result5,result6,result7,result8])
+        flow_df=pd.concat([*results]) # Concatinating the flow data from all the processes
+        del results # Deleting the results to free up the memory
         print(f'{datetime.now()} Flow Generation Completed\n')
 
         # Saving Flow
