@@ -36,7 +36,7 @@ def readJsonFiles(root, month_file):
     del temp
     data=pd.concat(data, ignore_index=True)
     print(f'{datetime.now()}: {month_file} processed.')
-    data.reanme(columns={'timestamp': 'datetime', 'device_iid_hash':'uid', 'impression_lat': 'lat', 'impression_lng': 'lng'}, inplace=True)
+    data.rename(columns={'timestamp': 'datetime', 'device_iid_hash':'uid', 'impression_lat': 'lat', 'impression_lng': 'lng'}, inplace=True)
     return data
 
 

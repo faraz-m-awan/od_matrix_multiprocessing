@@ -41,7 +41,7 @@ from ReadJson import readJsonFiles
 
 
 class ODCalculation():
-    
+
     db_type='json' #'postgres' | 'json'
     year=2019
     month=['all'] #[i for i in range(1,13)] month number | ['all']
@@ -182,7 +182,7 @@ if __name__=='__main__':
                 results = list(executor.map(fetchData, query)) # Fetching data from the database using 8 threads. Each thread will fetch data for a specific date window.
         elif obj.db_type=='json':
             print(f'{datetime.now()}: Fetching data from Json Files')
-            month_files=os.listdir(obj.root)
+            month_files=os.listdir(obj.root)[0:2]
             args=[(obj.root, mf) for mf in month_files]
             with Pool(obj.cpu_cores) as p:
                 results=p.starmap(readJsonFiles, args)
