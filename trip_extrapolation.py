@@ -488,7 +488,7 @@ if __name__=='__main__':
 
                 saveFile(
                     path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{year}\\oa_agg_stay_points',
-                    fname=f'non_agg_stay_points_{radius}m_{year}.csv',
+                    fname=f'oa_agg_stay_points_{radius}m_{year}.csv',
                     df=geo_df[
                         [
                         'year', 

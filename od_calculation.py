@@ -36,17 +36,30 @@ from data_load import fetchData
 from impression_filtering import getFilteredData,filter_data_process
 from stop_node_detection import getStopNodes, stop_node_process
 from flow_generation import generateFlow, processFlowGenration
+from ReadJson import readJsonFiles
 
 
 
 class ODCalculation():
 
-    year=2023
+    
+    db_type='json' #'postgres' | 'json'
+    year=2019
     month=['all'] #[i for i in range(1,13)] month number | ['all']
-    radius=200 # Radius in meters for Stop Node Detection
+    radius=500 # Radius in meters for Stop Node Detection
     time_th=5 # Time Threshold in minutes for Stop Node Detection
     impr_acc=100 # Impression Accuracy in meters for filtering the data
     cpu_cores=8 # Cores to be used for multiprocessing
+
+    # For Json Data
+    city = 'Manchester'
+    root = f'U:/Operations/SCO/Faraz/huq_compiled/{city}/{year}'
+
+    # Output Directory
+    output_dir=f'U:\\Projects\\Huq\\Faraz\\\od_validation'
+    
+
+
 
     def __init__(self_):
         return
@@ -163,10 +176,12 @@ if __name__=='__main__':
     
     obj=ODCalculation()
     
+    
     for month in obj.month:
 
         print(f"""
         <OD Calculation Parameters>
+        City: {obj.city}
         Year: {obj.year}
         Month: {month}
         Radius: {obj.radius}
@@ -185,23 +200,32 @@ if __name__=='__main__':
         print(f'{start_time}: Fetching data from Database')
         
 
-        if month=='all':
-            print('Yearly Processing')
-            query=obj.getQueriesForAllYearProcessing(obj.year) # Getting the queries for fetching data for the whole year
-        else:
-            print('Monthly Processing')
-            query=obj.getQueriesForMonthlyProcessing(obj.year,month) # Getting the queries for fetching data for the month
+        if obj.db_type=='postgres':
+            if month=='all':
+                print('Yearly Processing')
+                query=obj.getQueriesForAllYearProcessing(obj.year) # Getting the queries for fetching data for the whole year
+            else:
+                print('Monthly Processing')
+                query=obj.getQueriesForMonthlyProcessing(obj.year,month) # Getting the queries for fetching data for the month
+            
         
-     
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            results = list(executor.map(fetchData, query)) # Fetching data from the database using 8 threads. Each thread will fetch data for a specific date window.
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                results = list(executor.map(fetchData, query)) # Fetching data from the database using 8 threads. Each thread will fetch data for a specific date window.
+        elif obj.db_type=='json':
+            print(f'{datetime.now()}: Fetching data from Json Files')
+            month_files=os.listdir(root)
+            args=[(obj.root, mf) for mf in month_files]
+            with Pool(cores) as p:
+                results=p.starmap(readJsonFiles, args)
+                results=pd.concat(df, ignore_index=True)
+
 
         print(f'{datetime.now()}: Data Concatination')
         #obj.raw_df=pd.concat(results)
         traj_df=pd.concat(results) # Concatinating the data fetched from the database
+        del results # Deleting the results to free up the memory
+
         print(f'{datetime.now()}: Data Concatination Completed')
-
-
         print(f'{datetime.now()}: Data fetching completed\n\n')
         print(f'Number of Records: {traj_df.shape[0]}')
     
@@ -255,8 +279,9 @@ if __name__=='__main__':
         
         # Saving Stop Nodes
         obj.saveFile(
-            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
-            fname=f'huq_stop_nodes_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\stop_nodes',
+            path=f'{obj.output_dir}\\{obj.city}\\{obj.year}\\stop_nodes',
+            fname=f'huq_stop_nodes_{obj.city}_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
             #fname=f'new_code_val_stop_nodes_{obj.radius}m_{obj.year}.csv',
             df=stdf
@@ -315,8 +340,9 @@ if __name__=='__main__':
 
         # Saving Flow
         obj.saveFile(
-            path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
-            fname=f'huq_trips_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
+            #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\{obj.year}\\trips',
+            path=f'{obj.output_dir}\\{obj.city}\\{obj.year}\\trips',
+            fname=f'huq_trips_{obj.city}_{obj.year}_{month}_{obj.radius}m_{obj.time_th}min_{obj.impr_acc}m.csv',
             #path=f'D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\validation',
             #fname=f'new_code_val_trips_{obj.radius}m_{obj.year}.csv',
             df=flow_df
