@@ -16,17 +16,16 @@ def readJsonFiles(root, month_file):
         gz_files = zf.namelist()
         if gz_files:
             for gz_file in gz_files:
+                print(f'{datetime.now()}: Processing {gz_file}')
                 with zf.open(gz_file, 'r') as f:
                     with gzip.open(f, 'rt', encoding='utf-8') as g:
-                        
-                        for line in g:
+                        lines=g.readlines()
+                        for line in lines:
                           
                             temp=json.loads(line.strip())
                             temp = {k: temp[k] for k in ['impression_acc', 'device_iid_hash', 'impression_lng', 'impression_lat', 'timestamp'] if k in temp}
-                            # temp['brand_categories'] = json.dumps(temp['brand_categories'])
-                            # temp['place_categories'] = json.dumps(temp['place_categories'])
                             try:
-                                temp=pd.DataFrame(temp,index=[0])
+                                #temp=pd.DataFrame(temp,index=[0])
                                 data.append(temp)
                             except Exception as e:
                                 print(temp)
@@ -34,7 +33,8 @@ def readJsonFiles(root, month_file):
                                 exit()
     
     del temp
-    data=pd.concat(data, ignore_index=True)
+    #data=pd.concat(data, ignore_index=True)
+    data=pd.DataFrame(data)
     print(f'{datetime.now()}: {month_file} processed.')
     data.rename(columns={'timestamp': 'datetime', 'device_iid_hash':'uid', 'impression_lat': 'lat', 'impression_lng': 'lng'}, inplace=True)
     return data
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 
     print(f'{datetime.now()}: Starting...')
     city = 'Manchester'
-    year = '2019'
+    year = '2021'
     root = f'U:/Operations/SCO/Faraz/huq_compiled/{city}/{year}'
     cores = 5#os.cpu_count()
 

@@ -2,25 +2,17 @@ import pandas as pd
 import numpy as np
 from skmob import TrajDataFrame,FlowDataFrame
 from skmob.preprocessing import filtering, detection, clustering
-
-
-
 import folium
 from folium.plugins import FloatImage
 from folium import plugins
-
-
 import psycopg2
 import os
 from os.path import join, isfile
 from tqdm import  tqdm
 import json
-
-
 import geopandas as gpd
 from shapely.geometry import Point
 import matplotlib.pyplot as plt
-
 from datetime import datetime
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
@@ -43,8 +35,8 @@ from ReadJson import readJsonFiles
 class ODCalculation():
 
     db_type='json' #'postgres' | 'json'
-    year=2019
-    month=['all'] #[i for i in range(1,13)] month number | ['all']
+    year=2021
+    month=[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
     radius=500 # Radius in meters for Stop Node Detection
     time_th=5 # Time Threshold in minutes for Stop Node Detection
     impr_acc=100 # Impression Accuracy in meters for filtering the data
@@ -57,8 +49,25 @@ class ODCalculation():
     def __init__(self_):
         return
 
-    def getLoadBalancedBuckets(self_,tdf,bucket_size): # Multiprocessing is being used for processing the data for Stop node detection and flow generation. This Funcition devides the data based on the UID and Number of Impressions in a way that load on every process is well-balanced.
-        
+    def getLoadBalancedBuckets(self_,tdf:pd.DataFrame,bucket_size:int)-> list: 
+        """
+        Description:
+            Multiprocessing is being used for processing the data for Stop node detection and flow generation. 
+            This Funcition devides the data based on the UID and Number of Impressions in a way that load on 
+            every processor core being used is well-balanced.
+
+        Parameters:
+            tdf (pd.DataFrame): Trajectory DataFrame containing the data to be processed.
+            bucket_size (int): Number of CPU Cores to be used for processing the data.
+
+        Returns:
+            list: List of Trajectory DataFrames. Each DataFrame will be processed in a seperate core as a seperate process.
+
+        Example:
+            >>> getLoadBalancedBuckets(tdf,bucket_size=8)
+            [df1,df2,df3,df4,df5,df6,df7,df8]
+        """
+
         print(f'{datetime.now()}: Getting unique users')
         unique_users=tdf['uid'].unique() # Getting Unique Users in the data
         print(f'{datetime.now()}: Creating sets')
@@ -89,7 +98,25 @@ class ODCalculation():
 
     
 
-    def getQueriesForAllYearProcessing(self_,year): 
+    def getQueriesForAllYearProcessing(self_,year:int)-> list:
+
+        """
+        Description:
+            This function generates the queries for fetching data from the database for the whole year.
+            The data is being fetched in chunks of two months. For example, the data for January and 
+            February will be fetched in the first query, March and April in the second query and so on.
+            Each query will be processed in a seperate process (CPU core).
+
+        Parameters:
+            year (int): Year for which the data is to be fetched.
+
+        Returns:
+            list: List of queries. Each query will fetch data for two months.
+
+        Example:
+            >>> getQueriesForAllYearProcessing(2019)
+            [query1,query2,query3,query4,query5,query6]
+        """ 
 
         query=[]
         for month in range(1,13,2): # This loop will run 6 times. Each loop will generate a query for fetching data for two months
@@ -110,7 +137,23 @@ class ODCalculation():
                     """
                     )           
         return query
-    def getQueriesForMonthlyProcessing(self_,year,month):
+    def getQueriesForMonthlyProcessing(self_,year:int,month:int)-> list:
+
+        """
+        Description:
+            This function generates the queries for fetching data from the database for a specific month.
+            The data is being fetched in chunks of 5 days. For example, the data for the whole month will 
+            be fetched in 6 queries. Each query will be processed in a seperate process (CPU core).
+        Parameters:
+            year (int): Year for which the data is to be fetched.
+            month (int): Month for which the data is to be fetched.
+        Returns:
+            list: List of queries. Each query will fetch data for 5 days and will be executed on a seperate
+            CPU core. 
+        Example:
+            >>> getQueriesForMonthlyProcessing(2019,1)
+            [query1,query2,query3,query4,query5,query6]
+        """
 
         query=[]
         for day in range(1,31,5): # We are using 6 threads to fetch the data. Each month will be devided into 5 date windows. Each Thread will be responsible for fetching data for its own date window.
@@ -142,7 +185,25 @@ class ODCalculation():
                     )
         return query
 
-    def saveFile(self_,path,fname,df):
+    def saveFile(self_,path:str,fname:str,df:pd.DataFrame)-> None:
+
+        """
+        Description:
+            This function saves the DataFrame into a CSV file. If the directory does not exist, 
+            it will create the directory. 
+        
+        Parameters:
+            path (str): Path where the file is to be saved.
+            fname (str): Name of the file.
+            df (pd.DataFrame): DataFrame to be saved.
+        
+        Returns:
+            None
+        
+        Example:
+            >>> saveFile('D:\Mobile Device Data\OD_calculation_latest_work\HUQ_OD\\2019\\stop_nodes','huq_stop_nodes_Manchester_2019_1_500m_5min_100m.csv',stdf)
+        """
+
         if not os.path.exists(path):
             os.makedirs(path)
         df.to_csv(join(path,fname),index=False)
@@ -182,7 +243,7 @@ if __name__=='__main__':
                 results = list(executor.map(fetchData, query)) # Fetching data from the database using 8 threads. Each thread will fetch data for a specific date window.
         elif obj.db_type=='json':
             print(f'{datetime.now()}: Fetching data from Json Files')
-            month_files=os.listdir(obj.root)
+            month_files=[f for f in os.listdir(obj.root) if f.split('_')[-1].split('.')[0]==str(month)] # Getting the files for the specific month
             args=[(obj.root, mf) for mf in month_files]
             with Pool(obj.cpu_cores) as p:
                 results=p.starmap(readJsonFiles, args)
