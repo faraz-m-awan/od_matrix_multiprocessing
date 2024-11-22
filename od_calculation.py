@@ -18,6 +18,7 @@ import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
 from multiprocessing import Pool, Manager
+import utils
 
 ####################################################
 #                                                  #
@@ -34,16 +35,16 @@ from ReadJson import readJsonFiles
 
 class ODCalculation():
 
-    db_type='json' #'postgres' | 'json'
-    year=2021
-    month=[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
-    radius=500 # Radius in meters for Stop Node Detection
-    time_th=5 # Time Threshold in minutes for Stop Node Detection
-    impr_acc=100 # Impression Accuracy in meters for filtering the data
-    cpu_cores=8 # Cores to be used for multiprocessing
-    city = 'Manchester' 
-    root = f'U:/Operations/SCO/Faraz/huq_compiled/{city}/{year}'# For Json Data
-    output_dir=f'U:\\Projects\\Huq\\Faraz\\\od_validation' # Output Directory
+    db_type= utils.DB_TYPE #'json' #'postgres' | 'json'
+    year= utils.YEAR
+    month= utils.MONTH #[i for i in range(1,13)] #[i for i in range(1,13)] month number | ['all']
+    radius= utils.RADIUS #500 # Radius in meters for Stop Node Detection
+    time_th= utils.TIME_THRESHOLD #5 # Time Threshold in minutes for Stop Node Detection
+    impr_acc= utils.IMPRESSION_ACCURACY #100 # Impression Accuracy in meters for filtering the data
+    cpu_cores= utils.CPU_CORES #8 # Cores to be used for multiprocessing
+    city = utils.CITY #'Edinburgh' 
+    root = utils.ROOT #f'U:/Operations/SCO/Faraz/huq_compiled/{city}/{year}'# For Json Data
+    output_dir= utils.OUTPUT_DIR #f'U:\\Projects\\Huq\\Faraz\\\od_validation' # Output Directory
 
 
     def __init__(self_):
