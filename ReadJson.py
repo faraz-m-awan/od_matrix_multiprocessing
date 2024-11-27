@@ -8,7 +8,21 @@ from tqdm import tqdm
 from datetime import datetime
 
 
-def readJsonFiles(root, month_file):
+def readJsonFiles(root:str, month_file:str)->pd.DataFrame:
+    """
+    Description:
+        This function iterates over the zip files in the given directory and reads the gzip json files within zip files.
+    Parameters:
+        root (str): Root directory containing the zip files
+        month_file (str): Name of the zip file
+    Returns:
+        pd.DataFrame: DataFrame containing the data from the json files
+    Example:
+        root = 'U:/Operations/SCO/Faraz/huq_compiled/Manchester/2021'
+        month_file = 'huq_manchester_v13_20021_3_part0001.json.gz'
+        readJsonFiles(root, month_file)
+
+    """
     print(f'{datetime.now()}: Processing {month_file}')
     data=[]
     month_zip_file = f'{root}/{month_file}' 

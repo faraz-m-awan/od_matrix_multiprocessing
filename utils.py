@@ -1,6 +1,6 @@
 
-YEAR=2019
-CITY='Edinburgh'
+YEAR=2021
+CITY='Bristol'
 ROOT = f'U:/Operations/SCO/Faraz/huq_compiled/{CITY}/{YEAR}'
 OUTPUT_DIR=f'U:\\Projects\\Huq\\Faraz\\final_OD_work_v2' # Output Directory
 DB_TYPE='json' #'postgres' | 'json'
